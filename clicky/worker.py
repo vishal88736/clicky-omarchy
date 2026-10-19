@@ -119,7 +119,7 @@ class Worker:
     async def dispatch(self,msg):
         cmd=msg.get('cmd');self.invalidate() if cmd in {'draft','select','fresh_context','switch','new','remove_attachment','remove_window'} else None
         if cmd=='state': self.state();self.mcp.notify()
-        elif cmd=='draft': self.store.draft(self.cid,msg.get('text',''))
+        elif cmd=='draft': self.store.draft(msg.get('conversation') or self.cid,msg.get('text',''))
         elif cmd in {'new','switch','clear'}:
             if self.active: raise ValueError('Stop the current operation before changing conversations')
             if cmd=='new': self.cid=self.store.new()

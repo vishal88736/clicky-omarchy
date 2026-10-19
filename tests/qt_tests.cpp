@@ -85,12 +85,14 @@ private slots:
             QTRY_VERIFY_WITH_TIMEOUT(!backend.state().value("activity").toList().isEmpty(),5000);
             QCOMPARE(backend.state().value("activity").toList().first().toMap().value("status").toString(),QString("completed"));
             const auto image=window->grabWindow();QVERIFY(!image.isNull());
-            QVERIFY(image.save(dir.path()+"/ui.png"));backend.shutdown();
+            QVERIFY(image.save(dir.path()+"/ui.png"));
+            input->setProperty("text","draft typed immediately before quit");
+            QVERIFY(QMetaObject::invokeMethod(window,"flushDraft"));backend.shutdown();
         }
         Backend restored;
         QTRY_VERIFY_WITH_TIMEOUT(!restored.state().value("conversation").toString().isEmpty(),10000);
         QCOMPARE(restored.state().value("conversation").toString(),cid);
-        QCOMPARE(restored.state().value("draft").toString(),QString("an unfinished draft"));restored.shutdown();
+        QCOMPARE(restored.state().value("draft").toString(),QString("draft typed immediately before quit"));restored.shutdown();
     }
 };
 int main(int argc,char**argv){qputenv("QT_QPA_PLATFORM","offscreen");qputenv("QT_QUICK_BACKEND","software");qputenv("QT_FORCE_STDERR_LOGGING","1");QGuiApplication app(argc,argv);QQuickStyle::setStyle("Material");UITest test;return QTest::qExec(&test,argc,argv);}

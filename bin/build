@@ -3,7 +3,12 @@ set -eu
 CLICKY_ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 cd "$CLICKY_ROOT"
 uv sync --frozen --python /usr/bin/python
-mkdir -p build
-cd build
-qmake6 ../clicky.pro
+mkdir -p build/native
+cd build/native
+qmake6 "$CLICKY_ROOT/clicky.pro"
 make -j4
+CLICKY_BINARY_TEMP="$(mktemp "$CLICKY_ROOT/build/.clicky.XXXXXX")"
+trap 'rm -f "$CLICKY_BINARY_TEMP"' EXIT HUP INT TERM
+cp clicky "$CLICKY_BINARY_TEMP"
+chmod 755 "$CLICKY_BINARY_TEMP"
+mv -f "$CLICKY_BINARY_TEMP" "$CLICKY_ROOT/build/clicky"

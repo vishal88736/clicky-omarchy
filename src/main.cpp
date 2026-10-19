@@ -76,7 +76,10 @@ int main(int argc,char **argv){
     });
     std::signal(SIGTERM,stopSignal);std::signal(SIGINT,stopSignal);QTimer signalPoll;signalPoll.start(100);
     QObject::connect(&signalPoll,&QTimer::timeout,&app,[&]{if(stopping)app.exit(0);});
-    QObject::connect(&app,&QCoreApplication::aboutToQuit,&backend,&Backend::shutdown);
+    QObject::connect(&app,&QCoreApplication::aboutToQuit,&app,[&]{
+        // Flush a draft even if quit arrives before its debounce timer fires.
+        QMetaObject::invokeMethod(window,"flushDraft");backend.shutdown();
+    });
     if(verb=="--smoke"){
         if(!args.value(3).isEmpty())QTimer::singleShot(2200,&app,[&]{if(auto *panel=window->findChild<QObject*>(args[3]))QMetaObject::invokeMethod(panel,"open");});
         show();QTimer::singleShot(3500,&app,[&]{const bool ok=window->grabWindow().save(args.value(2));app.exit(ok?0:1);});

@@ -30,7 +30,7 @@ ApplicationWindow {
         for (let s of backend.servers) for(let t of s.tools) rows.push({server:s.id, name:t.name, schema:t.schema, enabled:t.enabled, label:s.id+" / "+t.name})
         return rows
     }
-    function flushDraft() { draftTimer.stop(); backend.send({cmd:"draft", text:input.text}) }
+    function flushDraft() { draftTimer.stop(); if(currentCid) backend.send({cmd:"draft",conversation:currentCid,text:input.text}) }
     function switchConversation(id) { flushDraft(); backend.send({cmd:"switch",id:id}) }
     function newConversation() { flushDraft(); backend.send({cmd:"new"}) }
     function inspectRequest() { flushDraft(); backend.send({cmd:"prepare",text:input.text}) }
@@ -49,7 +49,7 @@ ApplicationWindow {
     Shortcut { sequence:"Ctrl+."; context:Qt.ApplicationShortcut; onActivated: backend.send({cmd:"cancel"}) }
     Shortcut { sequence:"Ctrl+Shift+Q"; context:Qt.ApplicationShortcut; onActivated: backend.quit() }
     Shortcut { sequence:"?"; enabled:!input.activeFocus && !search.activeFocus; context:Qt.ApplicationShortcut; onActivated: helpDialog.open() }
-    Timer { id:draftTimer; interval:200; onTriggered: backend.send({cmd:"draft",text:input.text}) }
+    Timer { id:draftTimer; interval:200; onTriggered: if(win.currentCid) backend.send({cmd:"draft",conversation:win.currentCid,text:input.text}) }
 
     Connections {
         target:backend
