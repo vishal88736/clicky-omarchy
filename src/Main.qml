@@ -73,6 +73,13 @@ ApplicationWindow {
 
     component SmallButton: Button { font.pixelSize:12; topInset:0; bottomInset:0; implicitHeight:34 }
     component SectionLabel: Label { color:"#87949d"; font.pixelSize:11; font.letterSpacing:1.2 }
+    component PanelDialog: Dialog {
+        Material.theme:Material.Dark
+        Material.accent:theme.accent
+        Material.roundedScale:theme.radius
+        background:Rectangle { color:"#1b2227";radius:theme.radius;border.color:"#34414a" }
+        Overlay.modal:Rectangle { color:"#b0000000" }
+    }
 
     Item {
         anchors.fill:parent
@@ -107,7 +114,7 @@ ApplicationWindow {
                                         text: { translator.language; return new Date(modelData.updated).toLocaleString(Qt.locale(),"dd MMM hh:mm") }
                                         color:"#87949d";font.pixelSize:10;Layout.fillWidth:true
                                     }
-                                    SmallButton { text:qsTr("Context"); flat:true; enabled:modelData.id!==win.currentCid && !backend.busy; onClicked: {flushDraft();backend.send({cmd:"history",id:modelData.id})} }
+                                    SmallButton { objectName:"addContext_"+modelData.id;text:qsTr("Context"); flat:true; enabled:modelData.id!==win.currentCid && !backend.busy; onClicked: {flushDraft();backend.send({cmd:"history",id:modelData.id})} }
                                 }
                             }
                             TapHandler { enabled:!backend.busy; onTapped:switchConversation(modelData.id) }
@@ -125,7 +132,7 @@ ApplicationWindow {
                                     required property var modelData
                                     width:parent.width
                                     Label { text:modelData.title+" · "+modelData.role;elide:Text.ElideRight;Layout.fillWidth:true;font.pixelSize:11 }
-                                    SmallButton { text:"×"; Accessible.name:qsTr("Remove context selection"); onClicked:backend.send({cmd:"select",message:modelData.id,enabled:false}) }
+                                    SmallButton { objectName:"removeContext_"+modelData.id;text:"×"; Accessible.name:qsTr("Remove context selection"); onClicked:backend.send({cmd:"select",message:modelData.id,enabled:false}) }
                                 }
                             }
                         }
@@ -227,7 +234,7 @@ ApplicationWindow {
         }
     }
 
-    Dialog {
+    PanelDialog {
         id:historyDialog;objectName:"contextDialog";title:qsTr("Choose historical messages");modal:true;anchors.centerIn:parent;width:Math.min(720,win.width-60);height:Math.min(580,win.height-70)
         standardButtons:Dialog.Close
         ColumnLayout {
@@ -239,13 +246,13 @@ ApplicationWindow {
                 delegate:ColumnLayout {
                     required property var modelData
                     width:ListView.view.width
-                    CheckBox { text:modelData.role;checked:win.selectedIds.indexOf(modelData.id)>=0;enabled:modelData.status==="complete"&&(modelData.role==="user"||modelData.role==="assistant");onClicked:backend.send({cmd:"select",message:modelData.id,enabled:checked}) }
+                    CheckBox { objectName:"contextSelect_"+modelData.id;text:modelData.role;checked:win.selectedIds.indexOf(modelData.id)>=0;enabled:modelData.status==="complete"&&(modelData.role==="user"||modelData.role==="assistant");onClicked:backend.send({cmd:"select",message:modelData.id,enabled:checked}) }
                     Label { text:modelData.content;textFormat:Text.PlainText;wrapMode:Text.Wrap;Layout.fillWidth:true;font.pixelSize:12 }
                 }
             }
         }
     }
-    Dialog {
+    PanelDialog {
         id:previewDialog;objectName:"requestDialog";title:qsTr("Inspect the exact request");modal:true;anchors.centerIn:parent;width:Math.min(800,win.width-50);height:Math.min(650,win.height-50)
         ColumnLayout {
             anchors.fill:parent
@@ -258,7 +265,7 @@ ApplicationWindow {
             }
         }
     }
-    Dialog {
+    PanelDialog {
         id:approvalDialog;objectName:"approvalDialog";title:qsTr("Approve one tool action");modal:true;closePolicy:Popup.NoAutoClose;anchors.centerIn:parent;width:Math.min(740,win.width-70);height:480
         ColumnLayout {
             anchors.fill:parent
@@ -273,7 +280,7 @@ ApplicationWindow {
             }
         }
     }
-    Dialog {
+    PanelDialog {
         id:settingsDialog;objectName:"settingsDialog";title:qsTr("Model & voice settings");modal:true;anchors.centerIn:parent;width:660;height:600;standardButtons:Dialog.Close
         ColumnLayout {
             anchors.fill:parent;spacing:10
@@ -300,7 +307,7 @@ ApplicationWindow {
             Item { Layout.fillHeight:true }
         }
     }
-    Dialog {
+    PanelDialog {
         id:toolsDialog;objectName:"toolsDialog";title:qsTr("MCP connections & tools");modal:true;anchors.centerIn:parent;width:Math.min(820,win.width-50);height:Math.min(650,win.height-50);standardButtons:Dialog.Close
         ColumnLayout {
             anchors.fill:parent
@@ -339,7 +346,7 @@ ApplicationWindow {
             }
         }
     }
-    Dialog {
+    PanelDialog {
         id:invokeDialog;title:qsTr("Invoke a discovered tool");modal:true;anchors.centerIn:parent;width:650;height:550;standardButtons:Dialog.Close
         ColumnLayout {
             anchors.fill:parent
@@ -349,7 +356,7 @@ ApplicationWindow {
             Button { text:qsTr("Review action");enabled:!backend.busy;onClicked:{try{let t=win.toolRows[toolChoice.currentIndex];backend.send({cmd:"tool_call",server:t.server,tool:t.name,arguments:JSON.parse(toolArgs.text)});invokeDialog.close()}catch(e){win.notice=qsTr("Invalid JSON arguments")}} }
         }
     }
-    Dialog {
+    PanelDialog {
         id:registerDialog;title:qsTr("Register a trusted MCP server");modal:true;anchors.centerIn:parent;width:680;height:500;standardButtons:Dialog.Close
         ColumnLayout {
             anchors.fill:parent
@@ -359,11 +366,11 @@ ApplicationWindow {
             Button { text:qsTr("Register disabled server");enabled:trustServer.checked;onClicked:{try{let s=JSON.parse(serverSpec.text);s.enabled=false;backend.send({cmd:"server_register",spec:s,confirmed:true});registerDialog.close()}catch(e){win.notice=qsTr("Invalid JSON configuration")}} }
         }
     }
-    Dialog {
+    PanelDialog {
         id:activityDialog;title:qsTr("Tool execution activity");modal:true;anchors.centerIn:parent;width:Math.min(800,win.width-50);height:Math.min(600,win.height-50);standardButtons:Dialog.Close
         ScrollView { anchors.fill:parent;TextArea{text:JSON.stringify({recent_persistent_events:backend.state.activity || [],session_details:win.trace},null,2);readOnly:true;wrapMode:TextEdit.Wrap;selectByMouse:true;textFormat:TextEdit.PlainText;font.pixelSize:11} }
     }
-    Dialog { id:clearDialog;title:qsTr("Clear this conversation?");modal:true;anchors.centerIn:parent;standardButtons:Dialog.Cancel|Dialog.Ok;Label{text:qsTr("Messages, drafts, selections and action records will be removed.");wrapMode:Text.Wrap;width:400}onAccepted:{input.text="";backend.send({cmd:"clear",confirmed:true})} }
-    Dialog { id:imageDialog;title:qsTr("Local screen preview");modal:true;anchors.centerIn:parent;width:win.width-80;height:win.height-80;standardButtons:Dialog.Close;Image{anchors.fill:parent;source:backend.state.attachment?"file://"+backend.state.attachment.path:"";fillMode:Image.PreserveAspectFit} }
-    Dialog { id:helpDialog;title:qsTr("Keyboard shortcuts");modal:true;anchors.centerIn:parent;standardButtons:Dialog.Close;Label{text:qsTr("Ctrl+Enter  Review request\nCtrl+N  New conversation\nCtrl+K  Search history\nCtrl+.  Cancel operation\nEscape  Hide / dismiss\nCtrl+Shift+Q  Quit\n?  Shortcuts")} }
+    PanelDialog { id:clearDialog;title:qsTr("Clear this conversation?");modal:true;anchors.centerIn:parent;standardButtons:Dialog.Cancel|Dialog.Ok;Label{text:qsTr("Messages, drafts, selections and action records will be removed.");wrapMode:Text.Wrap;width:400}onAccepted:{input.text="";backend.send({cmd:"clear",confirmed:true})} }
+    PanelDialog { id:imageDialog;title:qsTr("Local screen preview");modal:true;anchors.centerIn:parent;width:win.width-80;height:win.height-80;standardButtons:Dialog.Close;Image{anchors.fill:parent;source:backend.state.attachment?"file://"+backend.state.attachment.path:"";fillMode:Image.PreserveAspectFit} }
+    PanelDialog { id:helpDialog;title:qsTr("Keyboard shortcuts");modal:true;anchors.centerIn:parent;standardButtons:Dialog.Close;Label{text:qsTr("Ctrl+Enter  Review request\nCtrl+N  New conversation\nCtrl+K  Search history\nCtrl+.  Cancel operation\nEscape  Hide / dismiss\nCtrl+Shift+Q  Quit\n?  Shortcuts")} }
 }

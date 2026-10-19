@@ -1,5 +1,6 @@
 #include <QGuiApplication>
 #include <QJsonDocument>
+#include <QJsonArray>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickItem>
@@ -13,9 +14,38 @@
 #include "../src/theme.h"
 #include "../src/translator.h"
 
+static QQuickItem *visualItem(QQuickItem *root,const QString &name){
+    if(root->objectName()==name)return root;
+    for(auto *child:root->childItems())if(auto *found=visualItem(child,name))return found;
+    return nullptr;
+}
+
 class UITest:public QObject {
     Q_OBJECT
 private slots:
+    void historicalContextSelectionAndPreview(){
+        QTemporaryDir dir;QVERIFY(dir.isValid());
+        qputenv("CLICKY_CONFIG_HOME",(dir.path()+"/config").toUtf8());qputenv("CLICKY_DATA_HOME",(dir.path()+"/data").toUtf8());qputenv("CLICKY_DISABLE_TTS","1");
+        QProcess seed;seed.setWorkingDirectory(QStringLiteral(CLICKY_PROJECT));
+        seed.start(QStringLiteral(CLICKY_PROJECT)+"/.venv/bin/python",{"-c",
+            "import json; from clicky.storage import Store; from clicky.config import Config; s=Store(); a=s.new('Test archive'); m=s.add(a,'user','INTENDED_UI_CONTEXT'); s.add(a,'assistant','UNSELECTED_UI_CONTEXT'); b=s.new('Current'); c=Config(); c.data['last_conversation']=b; c.save(); print(json.dumps([a,m,b])); s.close()"});
+        QVERIFY(seed.waitForFinished(5000));QCOMPARE(seed.exitCode(),0);const auto data=QJsonDocument::fromJson(seed.readAllStandardOutput()).array();QCOMPARE(data.size(),3);
+        Backend backend;Theme theme;Translator translator;QQmlApplicationEngine engine;
+        engine.rootContext()->setContextProperty("backend",&backend);engine.rootContext()->setContextProperty("theme",&theme);engine.rootContext()->setContextProperty("translator",&translator);
+        engine.load(QUrl("qrc:/Main.qml"));QVERIFY(!engine.rootObjects().isEmpty());auto *window=qobject_cast<QQuickWindow*>(engine.rootObjects().first());window->show();
+        QTRY_COMPARE_WITH_TIMEOUT(backend.state().value("conversation").toString(),data[2].toString(),10000);
+        const auto addName="addContext_"+data[0].toString();QTRY_VERIFY(visualItem(window->contentItem(),addName));
+        auto click=[&](QQuickItem *item){QTest::mouseClick(window,Qt::LeftButton,Qt::NoModifier,item->mapToScene(QPointF(item->width()/2,item->height()/2)).toPoint());};
+        click(visualItem(window->contentItem(),addName));auto *dialog=window->findChild<QObject*>("contextDialog");QVERIFY(dialog);QTRY_VERIFY(dialog->property("opened").toBool());
+        QCOMPARE(backend.state().value("conversation").toString(),data[2].toString());
+        const auto selectName="contextSelect_"+QString::number(data[1].toInt());QTRY_VERIFY(visualItem(window->contentItem(),selectName));click(visualItem(window->contentItem(),selectName));
+        QTRY_COMPARE_WITH_TIMEOUT(backend.state().value("selections").toList().size(),1,5000);QMetaObject::invokeMethod(dialog,"close");QTRY_VERIFY(!dialog->property("visible").toBool());
+        auto *input=window->findChild<QQuickItem*>("messageInput");QVERIFY(input);input->setProperty("text","question");QMetaObject::invokeMethod(window,"inspectRequest");
+        auto *preview=window->findChild<QObject*>("requestDialog");QTRY_VERIFY(preview->property("opened").toBool());
+        const auto request=QJsonDocument::fromVariant(window->property("requestPreview")).toJson();QVERIFY(request.contains("INTENDED_UI_CONTEXT"));QVERIFY(!request.contains("UNSELECTED_UI_CONTEXT"));QMetaObject::invokeMethod(preview,"close");QTRY_VERIFY(!preview->property("visible").toBool());
+        const auto removeName="removeContext_"+QString::number(data[1].toInt());QTRY_VERIFY(visualItem(window->contentItem(),removeName));click(visualItem(window->contentItem(),removeName));
+        QTRY_COMPARE_WITH_TIMEOUT(backend.state().value("selections").toList().size(),0,5000);backend.shutdown();
+    }
     void realUiDraftRestartAndDialogs(){
         QTemporaryDir dir;QVERIFY(dir.isValid());
         qputenv("CLICKY_CONFIG_HOME",(dir.path()+"/config").toUtf8());qputenv("CLICKY_DATA_HOME",(dir.path()+"/data").toUtf8());
