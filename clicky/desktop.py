@@ -95,9 +95,12 @@ class DesktopBroker:
         return [{k:w.get(k) for k in ["address","class","title","pid","floating"]} for w in raw]
     async def window(self,address,action):
         if not re.fullmatch(r"0x[0-9a-fA-F]+",address) or address not in {w["address"] for w in await self.windows()}: raise ValueError("Window no longer exists")
-        actions={"focus":"focuswindow","close":"closewindow"}
-        if action not in actions: raise ValueError("Only focus and close are permitted")
-        return await command(["hyprctl","dispatch",actions[action],"address:"+address],3)
+        if action not in {"focus","close"}: raise ValueError("Only focus and close are permitted")
+        # Hyprland 0.56 dispatch consumes a Lua expression, not legacy dispatcher words.
+        function='hl.dsp.focus' if action=='focus' else 'hl.dsp.window.close'
+        result=await command(["hyprctl","dispatch",function+'({ window = "address:'+address+'" })'],3)
+        active=await self.active()
+        return json.dumps({'dispatch':result.strip(),'active_address':active.get('address'),'requested_address':address})
     async def open_url(self,url):
         p=urlsplit(url)
         if p.scheme not in {"https","http"} or not p.hostname or p.username or p.password or any(c in url for c in '\r\n\x00'): raise ValueError("Only ordinary HTTP(S) URLs are permitted")
@@ -113,7 +116,9 @@ class DesktopBroker:
     async def pointer(self,x,y):
         monitors=json.loads(await command(["hyprctl","monitors","-j"],3))
         if not any(m['x']<=x<m['x']+m['width']/m['scale'] and m['y']<=y<m['y']+m['height']/m['scale'] for m in monitors): raise ValueError("Point is outside connected monitor geometry")
-        return await command(["hyprctl","dispatch","movecursor",str(int(x)),str(int(y))],3)
+        result=await command(["hyprctl","dispatch",f"hl.dsp.cursor.move({{ x = {int(x)}, y = {int(y)} }})"],3)
+        actual=json.loads(await command(['hyprctl','cursorpos','-j'],3))
+        return json.dumps({'dispatch':result.strip(),'actual':actual})
     async def type_text(self,address,text):
         active=await self.active()
         classes=self.config.data.get("input_classes",[])

@@ -129,7 +129,7 @@ class Worker:
             elif msg.get('confirmed'): self.store.clear(self.cid)
             else: raise ValueError('Clear requires explicit confirmation')
             self.remove_attachment();self.window=None;self.config.data['last_conversation']=self.cid;self.config.save();self.state()
-        elif cmd=='search': self.emit('search',conversations=self.store.conversations(msg.get('text','')))
+        elif cmd=='search': self.emit('search',query=msg.get('text',''),conversations=self.store.conversations(msg.get('text','')))
         elif cmd=='history': self.emit('history',conversation=msg['id'],messages=self.store.messages(msg['id']))
         elif cmd=='select': self.store.select(self.cid,int(msg['message']),bool(msg['enabled']));self.state()
         elif cmd=='fresh_context': self.store.fresh_context(self.cid);self.state()

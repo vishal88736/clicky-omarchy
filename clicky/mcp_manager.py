@@ -52,7 +52,8 @@ class Connection:
                     listing=await session.list_tools(params=types.PaginatedRequestParams(cursor=cursor) if cursor else None)
                     for tool in listing.tools:
                         Draft202012Validator.check_schema(tool.input_schema)
-                        self.tools[tool.name]={"name":tool.name,"description":tool.description or "","schema":tool.input_schema}
+                        self.tools[tool.name]={"name":tool.name,"description":tool.description or "","schema":tool.input_schema,
+                            "annotations":tool.annotations.model_dump(mode='json') if tool.annotations else {}}
                     cursor=listing.next_cursor
                     if not cursor: break
                 else: raise ValueError("Excessive MCP tool pagination")
@@ -128,7 +129,7 @@ class MCPManager:
             for name,t in c.tools.items():
                 if name in spec.get("disabled_tools",[]): continue
                 alias="mcp_"+hashlib.sha256((spec["id"]+":"+name).encode()).hexdigest()[:24]
-                result[alias]={"server":spec["id"],"tool":name,"schema":t["schema"],
+                result[alias]={"server":spec["id"],"tool":name,"schema":t["schema"],"annotations":t['annotations'],
                     "definition":{"type":"function","function":{"name":alias,"description":(spec["id"]+" / "+name+": "+t["description"])[:1800],"parameters":t["schema"]}}}
         return result
     async def call(self,alias,args):

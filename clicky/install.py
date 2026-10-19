@@ -57,7 +57,7 @@ def install(home,hotkey='SUPER + CTRL + SEMICOLON',activate=True,autostart=True)
     desktop='[Desktop Entry]\nType=Application\nName=Clicky\nName[hi]=क्लिकी\nComment=AI desktop assistant with explicit context and reviewed actions\nComment[hi]=संदर्भ और अनुमति के साथ डेस्कटॉप सहायक\n'
     desktop+='Exec="'+str(launcher).replace('\\','\\\\').replace('"','\\"')+'" open\nIcon=clicky\nTerminal=false\nCategories=Utility;\nStartupWMClass=clicky\n'
     service='[Unit]\nDescription=Clicky desktop assistant\nPartOf=graphical-session.target\nAfter=graphical-session.target\n\n[Service]\nType=simple\n'
-    service+='ExecStart="'+str(launcher).replace('%','%%').replace('"','\\"')+'" open --background\nEnvironment=QT_QPA_PLATFORM=wayland\nRestart=on-failure\nRestartSec=3\nTimeoutStopSec=8\nUMask=0077\n\n[Install]\nWantedBy=graphical-session.target\n'
+    service+='ExecStart="'+str(launcher).replace('%','%%').replace('"','\\"')+'" open --background\nEnvironment=QT_QPA_PLATFORM=wayland\nRestart=on-failure\nRestartSec=3\nKillMode=mixed\nTimeoutStopSec=8\nUMask=0077\n\n[Install]\nWantedBy=graphical-session.target\n'
     files={launcher:('#!/bin/sh\nexec '+shlex.quote(str(PROJECT/'bin/clicky'))+' "$@"\n').encode(),
         integration:lua.encode(),home/'.local/share/applications/clicky.desktop':desktop.encode(),
         home/'.config/systemd/user/clicky.service':service.encode(),home/'.local/share/icons/hicolor/scalable/apps/clicky.svg':(PROJECT/'pkgbuild/clicky.svg').read_bytes()}

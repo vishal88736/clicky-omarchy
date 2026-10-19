@@ -27,6 +27,7 @@ public:
     Q_INVOKABLE void speak(const QString &text);
     Q_INVOKABLE void mute();
     Q_INVOKABLE void dismissError();
+    Q_INVOKABLE void quit() { emit quitRequested(); }
     void shutdown();
 signals:
     void stateChanged();
@@ -38,6 +39,7 @@ signals:
     void workerEvent(const QVariantMap &value);
     void showRequested();
     void hideRequested();
+    void quitRequested();
 private:
     void consume();
     void fail(const QString &message);

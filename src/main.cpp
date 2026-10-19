@@ -52,8 +52,14 @@ int main(int argc,char **argv){
         window->setScreen(screen);const auto g=screen->availableGeometry();window->resize(qMin(1120,g.width()-40),qMin(780,g.height()-40));
         window->setPosition(g.center()-QPoint(window->width()/2,window->height()/2));
     }
-    auto show=[window]{window->show();window->raise();window->requestActivate();};
+    auto show=[window]{
+        window->show();window->raise();window->requestActivate();
+        if(qEnvironmentVariable("QT_QPA_PLATFORM")!="offscreen")QTimer::singleShot(80,window,[]{
+            QProcess::startDetached("hyprctl",{"dispatch","hl.dsp.focus({ window = \"class:^clicky$\" })"});
+        });
+    };
     QObject::connect(&backend,&Backend::showRequested,&app,show);QObject::connect(&backend,&Backend::hideRequested,window,&QWindow::hide);
+    QObject::connect(&backend,&Backend::quitRequested,&app,[&]{app.exit(0);});
     QObject::connect(&server,&QLocalServer::newConnection,&app,[&]{
         while(auto *client=server.nextPendingConnection()){
             QObject::connect(client,&QLocalSocket::disconnected,client,&QObject::deleteLater);
@@ -61,7 +67,7 @@ int main(int argc,char **argv){
                 if(client->bytesAvailable()>100){client->abort();return;}
                 if(!client->canReadLine())return;
                 const auto cmd=client->readLine().trimmed();
-                if(cmd=="stop")app.quit();else if(cmd=="hide")window->hide();else if(cmd=="open")show();
+                if(cmd=="stop")app.exit(0);else if(cmd=="hide")window->hide();else if(cmd=="open")show();
                 else if(cmd=="toggle"){if(window->isVisible())window->hide();else show();}
                 client->write(window->isVisible()?"visible\n":"hidden\n");client->flush();client->disconnectFromServer();
             });
@@ -69,9 +75,10 @@ int main(int argc,char **argv){
         }
     });
     std::signal(SIGTERM,stopSignal);std::signal(SIGINT,stopSignal);QTimer signalPoll;signalPoll.start(100);
-    QObject::connect(&signalPoll,&QTimer::timeout,&app,[&]{if(stopping)app.quit();});
+    QObject::connect(&signalPoll,&QTimer::timeout,&app,[&]{if(stopping)app.exit(0);});
     QObject::connect(&app,&QCoreApplication::aboutToQuit,&backend,&Backend::shutdown);
     if(verb=="--smoke"){
+        if(!args.value(3).isEmpty())QTimer::singleShot(2200,&app,[&]{if(auto *panel=window->findChild<QObject*>(args[3]))QMetaObject::invokeMethod(panel,"open");});
         show();QTimer::singleShot(3500,&app,[&]{const bool ok=window->grabWindow().save(args.value(2));app.exit(ok?0:1);});
     }else if(!args.contains("--background"))show();
     return app.exec();

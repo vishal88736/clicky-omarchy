@@ -44,6 +44,16 @@ private slots:
             input->forceActiveFocus();QTest::keyClick(window,Qt::Key_Return,Qt::ControlModifier);
             auto *preview=window->findChild<QObject*>("requestDialog");QVERIFY(preview);QTRY_VERIFY_WITH_TIMEOUT(preview->property("opened").toBool(),5000);
             QMetaObject::invokeMethod(preview,"close");
+            QTRY_VERIFY_WITH_TIMEOUT(backend.servers().first().toMap().value("state").toString()=="connected",10000);
+            QSignalSpy spy(&backend,&Backend::workerEvent);
+            backend.send({{"cmd","tool_call"},{"server","workspace"},{"tool","capabilities"},{"arguments",QVariantMap{}}});
+            auto *approval=window->findChild<QObject*>("approvalDialog");QVERIFY(approval);QTRY_VERIFY_WITH_TIMEOUT(approval->property("opened").toBool(),5000);
+            QString approvalId;
+            for(const auto &row:spy){auto v=row.first().toMap();if(v.value("event")=="approval")approvalId=v.value("id").toString();}
+            QVERIFY(!approvalId.isEmpty());backend.send({{"cmd","approve"},{"id",approvalId},{"allow",true}});
+            QTRY_VERIFY_WITH_TIMEOUT(!backend.busy(),5000);
+            QTRY_VERIFY_WITH_TIMEOUT(!backend.state().value("activity").toList().isEmpty(),5000);
+            QCOMPARE(backend.state().value("activity").toList().first().toMap().value("status").toString(),QString("completed"));
             const auto image=window->grabWindow();QVERIFY(!image.isNull());
             QVERIFY(image.save(dir.path()+"/ui.png"));backend.shutdown();
         }

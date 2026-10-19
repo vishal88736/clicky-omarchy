@@ -4,6 +4,7 @@ import asyncio
 import json
 from pathlib import Path
 from mcp.server.mcpserver import MCPServer
+from mcp.types import ToolAnnotations
 from .config import Config
 from .desktop import Files,DesktopBroker,command
 
@@ -11,16 +12,17 @@ from .desktop import Files,DesktopBroker,command
 def build(kind,config):
     server=MCPServer("clicky-"+kind,version="0.1.0",log_level="ERROR")
     files=Files(config.data['roots']);desktop=DesktopBroker(config)
-    @server.tool()
+    read=ToolAnnotations(read_only_hint=True,destructive_hint=False,open_world_hint=False)
+    @server.tool(annotations=read)
     def capabilities() -> dict:
         """Read the server's limits and permitted filesystem roots. No external data is read."""
         return {"kind":kind,"roots":config.data['roots'],"arbitrary_shell":False,"approval":"host must approve every call"}
     if kind=='workspace':
-        @server.tool()
+        @server.tool(annotations=read)
         def list_directory(path:str) -> list[str]:
             """List up to 250 visible names inside an explicitly permitted root; no symlinks."""
             return files.listing(path)
-        @server.tool()
+        @server.tool(annotations=read)
         def read_text(path:str) -> str:
             """Read a UTF-8 regular file of at most 32 KiB inside permitted roots. No hidden files."""
             return files.read(path)
@@ -28,7 +30,7 @@ def build(kind,config):
         def write_text(path:str,text:str) -> dict:
             """WRITE: atomically create or replace a file inside permitted roots. Requires explicit approval."""
             return files.write(path,text)
-        @server.tool()
+        @server.tool(annotations=read)
         async def git_read(repository:str,operation:str='status') -> str:
             """Read Git status or diff inside a permitted root; no hooks, external diff, or network."""
             files.listing(repository)
@@ -39,11 +41,11 @@ def build(kind,config):
             if operation not in args: raise ValueError('Only status and diff are permitted')
             return await command(['git','-c','core.fsmonitor=false','-C',str(path)]+args[operation],5,32000)
     else:
-        @server.tool()
+        @server.tool(annotations=read)
         async def active_window() -> dict:
             """Read active-window metadata, including its title, after explicit approval."""
             return await desktop.active()
-        @server.tool()
+        @server.tool(annotations=read)
         async def list_windows() -> list[dict]:
             """Read open-window metadata and addresses after explicit approval."""
             return await desktop.windows()

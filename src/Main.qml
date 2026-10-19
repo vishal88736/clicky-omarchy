@@ -20,6 +20,7 @@ ApplicationWindow {
     property var approval: ({})
     property var trace: []
     property var foundModels: []
+    property var searchResults: []
     property var providerForm: ({})
     property string notice: ""
     property bool helpVisible: false
@@ -35,6 +36,7 @@ ApplicationWindow {
     function inspectRequest() { flushDraft(); backend.send({cmd:"prepare",text:input.text}) }
     function closeOverlay() { flushDraft(); win.hide() }
     onClosing: function(event) { event.accepted=false; closeOverlay() }
+    onVisibleChanged: if(visible) input.forceActiveFocus()
 
     Shortcut { sequence:"Escape"; context:Qt.ApplicationShortcut; onActivated: {
         if(approvalDialog.opened) backend.send({cmd:"approve",id:approval.id,allow:false})
@@ -45,7 +47,7 @@ ApplicationWindow {
     Shortcut { sequence:"Ctrl+N"; context:Qt.ApplicationShortcut; onActivated: if(!backend.busy) newConversation() }
     Shortcut { sequence:"Ctrl+K"; context:Qt.ApplicationShortcut; onActivated: search.forceActiveFocus() }
     Shortcut { sequence:"Ctrl+."; context:Qt.ApplicationShortcut; onActivated: backend.send({cmd:"cancel"}) }
-    Shortcut { sequence:"Ctrl+Shift+Q"; context:Qt.ApplicationShortcut; onActivated: Qt.quit() }
+    Shortcut { sequence:"Ctrl+Shift+Q"; context:Qt.ApplicationShortcut; onActivated: backend.quit() }
     Shortcut { sequence:"?"; enabled:!input.activeFocus && !search.activeFocus; context:Qt.ApplicationShortcut; onActivated: helpDialog.open() }
     Timer { id:draftTimer; interval:200; onTriggered: backend.send({cmd:"draft",text:input.text}) }
 
@@ -63,6 +65,7 @@ ApplicationWindow {
             if(v.event==="transcript") { input.text+=(input.text?"\n":"")+v.text; input.forceActiveFocus() }
             if(v.event==="request_started" && v.conversation===win.currentCid) input.text=""
             if(v.event==="models") { win.foundModels=v.models; win.notice=qsTr("Discovered models: %1").arg(v.models.join(", ")) }
+            if(v.event==="search" && v.query===search.text) win.searchResults=v.conversations
             if(v.event==="notice") win.notice=v.message
             if(v.event==="usage") win.notice=qsTr("Provider usage: %1").arg(JSON.stringify(v.usage))
         }
@@ -87,11 +90,11 @@ ApplicationWindow {
                         SmallButton { text:"+"; Accessible.name:qsTr("New conversation"); enabled:!backend.busy; onClicked:newConversation() }
                     }
                     Label { text:qsTr("Your desktop, with context."); color:"#87949d"; font.pixelSize:11 }
-                    TextField { id:search; objectName:"historySearch"; Layout.fillWidth:true; placeholderText:qsTr("Search conversations"); font.pixelSize:12 }
+                    TextField { id:search; objectName:"historySearch"; Layout.fillWidth:true; placeholderText:qsTr("Search conversations"); font.pixelSize:12;onTextChanged:backend.send({cmd:"search",text:text}) }
                     SectionLabel { text:qsTr("CONVERSATIONS") }
                     ListView {
                         id:historyList; objectName:"historyList"; Layout.fillWidth:true; Layout.fillHeight:true; clip:true; spacing:5
-                        model:(backend.state.conversations || []).filter(function(c){return c.title.toLowerCase().indexOf(search.text.toLowerCase())>=0})
+                        model:search.text.length?win.searchResults:(backend.state.conversations || [])
                         delegate:Rectangle {
                             required property var modelData
                             width:historyList.width; height:74; radius:theme.radius
@@ -100,7 +103,10 @@ ApplicationWindow {
                                 anchors.fill:parent; anchors.margins:9; spacing:2
                                 Label { text:modelData.title; elide:Text.ElideRight; Layout.fillWidth:true; font.pixelSize:12 }
                                 RowLayout {
-                                    Label { text:modelData.updated.slice(0,16).replace("T"," ");color:"#87949d";font.pixelSize:10;Layout.fillWidth:true }
+                                    Label {
+                                        text: { translator.language; return new Date(modelData.updated).toLocaleString(Qt.locale(),"dd MMM hh:mm") }
+                                        color:"#87949d";font.pixelSize:10;Layout.fillWidth:true
+                                    }
                                     SmallButton { text:qsTr("Context"); flat:true; enabled:modelData.id!==win.currentCid && !backend.busy; onClicked: {flushDraft();backend.send({cmd:"history",id:modelData.id})} }
                                 }
                             }
@@ -163,7 +169,7 @@ ApplicationWindow {
                         anchors.centerIn:parent;width:Math.min(450,parent.width-60);spacing:16
                         Label { text:qsTr("A little space to think.");font.pixelSize:29;font.weight:Font.Light;Layout.fillWidth:true;wrapMode:Text.WordWrap }
                         Label { text:qsTr("Ask a question, bring a screen capture, or connect a tool. You choose what the assistant can see and do.");font.pixelSize:14;lineHeight:1.4;wrapMode:Text.WordWrap;color:"#a7b1b8";Layout.fillWidth:true }
-                        Label { text:qsTr("Local model setup is deferred. Open Settings when your endpoint is ready.");font.pixelSize:12;wrapMode:Text.WordWrap;color:theme.accent;Layout.fillWidth:true;visible:!(backend.state.provider || {}).model }
+                        Label { text:qsTr("Open Settings to connect your local model.");font.pixelSize:12;wrapMode:Text.WordWrap;color:theme.accent;Layout.fillWidth:true;visible:!(backend.state.provider || {}).model }
                     }
                     ListView {
                         id:messages;objectName:"messageList";anchors.fill:parent;anchors.margins:20;clip:true;spacing:18
@@ -253,7 +259,7 @@ ApplicationWindow {
         }
     }
     Dialog {
-        id:approvalDialog;title:qsTr("Approve one tool action");modal:true;closePolicy:Popup.NoAutoClose;anchors.centerIn:parent;width:Math.min(740,win.width-70);height:480
+        id:approvalDialog;objectName:"approvalDialog";title:qsTr("Approve one tool action");modal:true;closePolicy:Popup.NoAutoClose;anchors.centerIn:parent;width:Math.min(740,win.width-70);height:480
         ColumnLayout {
             anchors.fill:parent
             Label { text:win.approval.tool || "";color:theme.accent;font.pixelSize:18;wrapMode:Text.Wrap;Layout.fillWidth:true }

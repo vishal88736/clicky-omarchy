@@ -30,12 +30,17 @@ Backend::Backend(QObject *parent):QObject(parent) {
     });
     m_worker.start(python,{"-m","clicky.worker"});
     const auto engines=QTextToSpeech::availableEngines();
-    if (!engines.isEmpty() && qEnvironmentVariable("CLICKY_DISABLE_TTS")!="1") {
-        m_speech=new QTextToSpeech(engines.first(),this);
-        if (m_speech->availableVoices().isEmpty()) m_speechStatus=tr("No local speech voice installed");
-        else m_speechStatus=tr("Local speech: %1").arg(engines.first());
+    m_speechStatus=tr("No usable local speech engine or voice installed");
+    if(qEnvironmentVariable("CLICKY_DISABLE_TTS")!="1")for(const auto &name:engines){
+        // Qt's mock plugin is a test backend, never an audible speech engine.
+        if(name=="mock")continue;
+        auto *candidate=new QTextToSpeech(name,this);
+        if(!candidate->availableVoices().isEmpty()&&candidate->state()!=QTextToSpeech::Error){m_speech=candidate;m_speechStatus=tr("Local speech: %1").arg(name);break;}
+        delete candidate;
+    }
+    if(m_speech){
         connect(m_speech,&QTextToSpeech::errorOccurred,this,[this](QTextToSpeech::ErrorReason,const QString &){fail(tr("Local speech engine failed. Check installed voices and audio output."));});
-    } else m_speechStatus=tr("No local speech engine installed");
+    }
 }
 Backend::~Backend(){ shutdown(); }
 void Backend::fail(const QString &message){m_error=message;emit errorChanged();}

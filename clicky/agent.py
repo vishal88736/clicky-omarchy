@@ -15,7 +15,10 @@ class Agent:
         Draft202012Validator(item['schema']).validate(args)
         label=item['server']+' / '+item['tool']
         self.store.event(cid,'tool',label,'proposed');self.emit('activity',tool=label,status='proposed',arguments=redacted(args))
-        if not await self.approvals.request(label,args,'Execute this tool once. It may read or change data using its configured server permissions.'):
+        reported_read=item.get('annotations',{}).get('read_only_hint',False)
+        effect=('Reported read-only operation. Reading may disclose private data.' if reported_read else 'Action: may change files/apps or communicate externally.')
+        effect+='\n'+item['definition']['function']['description']+'\nServer annotations are advisory. Approve only this reviewed invocation.'
+        if not await self.approvals.request(label,args,redacted(effect)):
             self.store.event(cid,'tool',label,'denied');self.emit('activity',tool=label,status='denied')
             return {'isError':True,'content':[{'type':'text','text':'User denied the action'}]}
         # Recheck configuration after the approval wait, so a disabled tool cannot execute.
