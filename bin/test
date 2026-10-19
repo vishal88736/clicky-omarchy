@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+CLICKY_ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+cd "$CLICKY_ROOT"
+.venv/bin/python -m pytest -q "$@"

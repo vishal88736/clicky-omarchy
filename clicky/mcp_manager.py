@@ -117,7 +117,9 @@ class MCPManager:
         if not spec.get("enabled"): return
         if sid in self.connections: await self.connections[sid].close()
         c=Connection(spec,self.secrets,self.notify);self.connections[sid]=c
-        await c.connect()
+        try: await c.connect()
+        except Exception:
+            c.state='error';self.notify();raise
     def catalog(self):
         result={}
         for spec in self.config.data["servers"]:

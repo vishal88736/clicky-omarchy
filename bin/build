@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+CLICKY_ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+cd "$CLICKY_ROOT"
+uv sync --frozen --python /usr/bin/python
+mkdir -p build
+cd build
+qmake6 ../clicky.pro
+make -j4

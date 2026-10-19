@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+CLICKY_ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+if [ ! -x "$CLICKY_ROOT/build/clicky" ]; then
+    printf '%s\n' 'Clicky has not been built. Run bin/build.' >&2
+    exit 1
+fi
+export CLICKY_PROJECT_HOME="$CLICKY_ROOT"
+exec "$CLICKY_ROOT/build/clicky" "$@"
