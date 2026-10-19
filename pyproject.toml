@@ -1,0 +1,14 @@
+[project]
+name = "clicky-assistant"
+version = "0.1.0"
+description = "Native Omarchy assistant with explicit context and genuine MCP"
+requires-python = ">=3.14,<3.15"
+dependencies = ["mcp==2.3.0", "httpx==0.28.1", "jsonschema==4.26.0"]
+
+[dependency-groups]
+dev = ["pytest>=8", "pytest-asyncio>=1"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = ["integration: actual local subprocess and HTTP transports"]
