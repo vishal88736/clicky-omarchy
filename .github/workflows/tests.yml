@@ -1,0 +1,16 @@
+name: Python protocol and security tests
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    container: python:3.14-slim
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install isolated project dependencies
+        run: |
+          python -m pip install uv==0.13.0
+          uv sync --frozen --python python3.14
+      - name: Test real MCP transports, context, approvals and provider fixtures
+        run: uv run --frozen --no-sync python -m pytest -q

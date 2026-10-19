@@ -1,6 +1,11 @@
 #!/bin/sh
 set -eu
 CLICKY_ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+if [ "${1:-}" = check ]; then
+    shift
+    cd "$CLICKY_ROOT"
+    exec .venv/bin/python -m clicky.check "$@"
+fi
 if [ ! -x "$CLICKY_ROOT/build/clicky" ]; then
     printf '%s\n' 'Clicky has not been built. Run bin/build.' >&2
     exit 1
