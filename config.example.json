@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "provider": {
+    "base_url": "http://127.0.0.1:8080/v1",
+    "model": "REPLACE_WITH_YOUR_LOCAL_MODEL_ID",
+    "key_ref": "",
+    "context_tokens": 8192,
+    "response_tokens": 1024,
+    "timeout": 90,
+    "stream": false,
+    "verified": {}
+  },
+  "roots": ["/REPLACE_WITH_AN_EXPLICITLY_PERMITTED_DIRECTORY"],
+  "commands": {"date": ["/usr/bin/date", "--iso-8601=seconds"]},
+  "servers": [
+    {
+      "id": "example_http",
+      "transport": "streamable_http",
+      "url": "http://127.0.0.1:9000/mcp",
+      "header_refs": {"Authorization": "example-mcp-authorization"},
+      "enabled": false,
+      "disabled_tools": []
+    }
+  ]
+}
