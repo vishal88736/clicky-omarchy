@@ -1,5 +1,6 @@
 """Private atomic configuration contains secret references, never credentials."""
 import copy
+import hashlib
 import json
 import os
 import re
@@ -27,8 +28,12 @@ def endpoint(value):
     return value.rstrip("/")
 
 
+def provider_key_reference(url):
+    return 'provider-'+hashlib.sha256(endpoint(url).encode()).hexdigest()[:24]
+
+
 def defaults():
-    return {"version":1,"provider":{"base_url":"http://127.0.0.1:8080/v1","model":"","key_ref":"provider",
+    return {"version":1,"provider":{"base_url":"http://127.0.0.1:8080/v1","model":"","key_ref":"",
         "context_tokens":8192,"response_tokens":1024,"stream":False,"verified":{},"timeout":90},
         "roots":[str(PROJECT/"docs")],
         "commands":{"date":["/usr/bin/date","--iso-8601=seconds"],"uptime":["/usr/bin/uptime"]},
@@ -44,6 +49,9 @@ class Config:
         if self.path.is_symlink(): raise ValueError("Refusing symlink configuration")
         self.data=json.loads(self.path.read_text()) if self.path.exists() else defaults()
         self.validate(self.data)
+        if self.data['provider'].get('key_ref')=='provider':
+            # Legacy unscoped references must never follow a user to another endpoint.
+            self.data['provider']['key_ref']='';self.save()
         if not self.path.exists(): self.save()
 
     @staticmethod
@@ -79,5 +87,6 @@ class Config:
         for key in ("base_url","model","context_tokens","response_tokens"):
             if key in values: p[key]=values[key]
         p["base_url"]=endpoint(p["base_url"]);p["model"]=p["model"].strip()
+        if p['base_url']!=self.data['provider']['base_url']: p['key_ref']=''
         if p!=self.data["provider"]: p.update(verified={},stream=False)
         self.validate(updated);self.data=updated;self.save()

@@ -14,7 +14,7 @@ import time
 import uuid
 from pathlib import Path
 from .agent import Agent
-from .config import Config,PROJECT
+from .config import Config,PROJECT,provider_key_reference
 from .context import Context
 from .desktop import DesktopBroker,command
 from .mcp_manager import MCPManager
@@ -152,7 +152,8 @@ class Worker:
             if self.active: raise ValueError('Stop current operation before changing provider')
             self.config.provider(msg['values'])
             if msg.get('key'):
-                await asyncio.to_thread(self.secrets.put,'provider',msg['key']);self.config.data['provider']['key_ref']='provider';self.config.save()
+                ref=provider_key_reference(self.config.data['provider']['base_url'])
+                await asyncio.to_thread(self.secrets.put,ref,msg['key']);self.config.data['provider']['key_ref']=ref;self.config.save()
             self.invalidate();self.state()
         elif cmd=='models':
             async def models(): self.emit('models',models=await (await self.provider()).models())

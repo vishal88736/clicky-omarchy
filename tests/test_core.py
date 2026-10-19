@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from clicky.storage import Store
 from clicky.context import Context
-from clicky.config import defaults,Config,endpoint
+from clicky.config import defaults,Config,endpoint,provider_key_reference
 from clicky.desktop import Files
 from clicky.security import Approvals,redacted
 
@@ -73,3 +73,12 @@ def test_config_endpoint_and_secret_references(tmp_path):
     bad=defaults();bad['servers'][0]['env']={'TOKEN':'secret'}
     with pytest.raises(ValueError):Config.validate(bad)
     assert redacted({'api_key':'secret','text':'Bearer aaaaa'})=={'api_key':'[redacted]','text':'Bearer [redacted]'}
+
+
+def test_credentials_are_scoped_to_endpoint_and_never_follow_url_changes(tmp_path):
+    c=Config(tmp_path);first=c.data['provider']['base_url'];ref=provider_key_reference(first)
+    c.data['provider']['key_ref']=ref;c.save()
+    c.provider({'model':'same endpoint'});assert c.data['provider']['key_ref']==ref
+    c.provider({'base_url':'http://127.0.0.1:9000/v1'});assert c.data['provider']['key_ref']==''
+    assert provider_key_reference(first)!=provider_key_reference(c.data['provider']['base_url'])
+    assert provider_key_reference(first+'/')==ref
