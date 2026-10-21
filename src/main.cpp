@@ -33,7 +33,7 @@ static QQuickItem *namedItem(QQuickItem *root,const QString &name){
 int main(int argc,char **argv){
     QGuiApplication app(argc,argv);app.setApplicationName("clicky");app.setApplicationVersion("0.2.0");app.setDesktopFileName("clicky");app.setQuitOnLastWindowClosed(false);
     const auto args=app.arguments();const QString verb=args.size()>1?args[1]:"open";
-    if(!QStringList{"open","toggle","hide","stop","status","info","tour","buddy","--smoke"}.contains(verb)){fprintf(stderr,"Usage: clicky [open|toggle|hide|status|info|stop|tour|buddy|--smoke image.png]\n");return 1;}
+    if(!QStringList{"open","toggle","hide","stop","status","info","tour","buddy","guides","--smoke"}.contains(verb)){fprintf(stderr,"Usage: clicky [open|toggle|hide|status|info|stop|tour|guides|--smoke image.png]\n");return 1;}
     QString runtime=qEnvironmentVariable("CLICKY_RUNTIME_HOME");
     if(runtime.isEmpty())runtime=QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation)+"/clicky";
     if(QFileInfo(runtime).isSymLink()){fprintf(stderr,"Refusing symlink runtime directory\n");return 1;}
@@ -85,12 +85,12 @@ int main(int argc,char **argv){
                 const auto cmd=client->readLine().trimmed();
                 if(cmd=="stop")app.exit(0);else if(cmd=="hide")window->hide();else if(cmd=="open")show();
                 else if(cmd=="toggle"){if(window->isVisible())window->hide();else show();}
-                else if(cmd=="tour"){companion.setEnabled(true);companion.tour();}
-                else if(cmd=="buddy")companion.setEnabled(!companion.enabled());
+                else if(cmd=="tour")companion.tour();
+                else if(cmd=="buddy"||cmd=="guides")companion.setEnabled(!companion.enabled());
                 if(cmd=="info"){
                     QPointF button;
                     if(auto *item=namedItem(window->contentItem(),"historyToggle"))button=item->mapToScene(QPointF(item->width()/2,item->height()/2));
-                    client->write(QJsonDocument::fromVariant(QVariantMap{{"visible",window->isVisible()},{"width",window->width()},{"height",window->height()},{"history_button_x",button.x()},{"history_button_y",button.y()},{"buddy",companion.enabled()},{"tracking",companion.available()},{"x",companion.position().x()},{"y",companion.position().y()},{"guiding",companion.guiding()},{"target_x",companion.target().x()},{"target_y",companion.target().y()}}).toJson(QJsonDocument::Compact)+'\n');
+                    client->write(QJsonDocument::fromVariant(QVariantMap{{"visible",window->isVisible()},{"width",window->width()},{"height",window->height()},{"history_button_x",button.x()},{"history_button_y",button.y()},{"guides",companion.enabled()},{"following",false},{"available",companion.available()},{"guiding",companion.guiding()},{"target_x",companion.target().x()},{"target_y",companion.target().y()}}).toJson(QJsonDocument::Compact)+'\n');
                 }
                 else client->write(window->isVisible()?"visible\n":"hidden\n");
                 client->flush();client->disconnectFromServer();
@@ -107,7 +107,7 @@ int main(int argc,char **argv){
     if(verb=="--smoke"){
         if(args.value(3)=="buddy"){
             window->hide();QQuickView preview(&engine,nullptr);preview.setColor(QColor("#171e19"));preview.setResizeMode(QQuickView::SizeRootObjectToView);preview.resize(640,260);
-            preview.setSource(QUrl("qrc:/BuddyOverlay.qml"));companion.guide(105,100,"Hey, I'm Clicky. Right here when you need a hand.");preview.show();
+            preview.setSource(QUrl("qrc:/BuddyOverlay.qml"));companion.setEnabled(true);companion.guide(105,100,"Hey, I'm Clicky. Right here when you need a hand.");preview.show();
             QTimer::singleShot(1800,&app,[&]{app.exit(preview.grabWindow().save(args.value(2))?0:1);});
             return app.exec();
         }
@@ -117,6 +117,7 @@ int main(int argc,char **argv){
         });
         show();QTimer::singleShot(3500,&app,[&]{const bool ok=window->grabWindow().save(args.value(2));app.exit(ok?0:1);});
     }else if(verb=="tour"){companion.tour();}
+    else if(verb=="buddy"||verb=="guides"){companion.setEnabled(!companion.enabled());}
     else if(!args.contains("--background"))show();
     return app.exec();
 }

@@ -49,12 +49,12 @@ def install(home,hotkey='SUPER + CTRL + SEMICOLON',activate=True,autostart=True)
     command=shlex.quote(str(launcher))+' toggle'
     lua='-- Clicky only: no packaged Omarchy files are modified.\n'
     lua+='o.bind('+json.dumps(hotkey)+', "Clicky assistant", '+json.dumps(command)+')\n'
-    lua+='o.window("^clicky$", { float = true, move = { "(monitor_w - window_w) * 0.5", "(monitor_h - window_h) * 0.5" } })\n'
+    lua+='o.window("^clicky$", { float = true, pin = true, border_size = 0, center = true })\n'
     block=(BEGIN+'dofile('+json.dumps(str(integration))+')\n'+END).encode()
     separator=b'' if not before or before.endswith(b'\n') else b'\n'
     # Include the separator in the owned block so uninstall restores exact bytes.
     block=separator+block
-    desktop='[Desktop Entry]\nType=Application\nName=Clicky\nName[hi]=क्लिकी\nComment=AI desktop assistant with explicit context and reviewed actions\nComment[hi]=संदर्भ और अनुमति के साथ डेस्कटॉप सहायक\n'
+    desktop='[Desktop Entry]\nType=Application\nName=Clicky\nName[hi]=क्लिकी\nComment=Your Omarchy pointer buddy — ask, talk, and point\nComment[hi]=संदर्भ और अनुमति के साथ डेस्कटॉप सहायक\n'
     desktop+='Exec="'+str(launcher).replace('\\','\\\\').replace('"','\\"')+'" open\nIcon=clicky\nTerminal=false\nCategories=Utility;\nStartupWMClass=clicky\n'
     service='[Unit]\nDescription=Clicky desktop assistant\nPartOf=graphical-session.target\nAfter=graphical-session.target\n\n[Service]\nType=simple\n'
     service+='ExecStart="'+str(launcher).replace('%','%%').replace('"','\\"')+'" open --background\nEnvironment=QT_QPA_PLATFORM=wayland\nRestart=on-failure\nRestartSec=3\nKillMode=mixed\nTimeoutStopSec=8\nUMask=0077\n\n[Install]\nWantedBy=graphical-session.target\n'

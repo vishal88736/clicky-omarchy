@@ -25,6 +25,14 @@ static QQuickItem *visualItem(QQuickItem *root,const QString &name){
 class UITest:public QObject {
     Q_OBJECT
 private slots:
+    void visualGuidanceBoundsAndCancellation(){
+        QTemporaryDir dir;QVERIFY(dir.isValid());qputenv("CLICKY_CONFIG_HOME",dir.path().toUtf8());
+        Companion companion;QVERIFY(!companion.enabled());companion.setEnabled(true);
+        companion.guide(-99999,-99999,"invalid");QVERIFY(!companion.guiding());
+        companion.guide(30,30,"visual hint");QVERIFY(companion.guiding());QCOMPARE(companion.caption(),QString("visual hint"));
+        companion.clear();QVERIFY(!companion.guiding());QVERIFY(companion.caption().isEmpty());
+        companion.setEnabled(false);Companion restored;QVERIFY(!restored.enabled());
+    }
     void typedPromptHttpStreamingAndRestart(){
         QTemporaryDir dir;QVERIFY(dir.isValid());
         qputenv("CLICKY_CONFIG_HOME",(dir.path()+"/config").toUtf8());qputenv("CLICKY_DATA_HOME",(dir.path()+"/data").toUtf8());qputenv("CLICKY_DISABLE_TTS","1");

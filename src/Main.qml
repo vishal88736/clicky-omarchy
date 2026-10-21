@@ -10,6 +10,7 @@ ApplicationWindow {
     property bool detailOpen: false
     property bool autoSend: false
     property bool hasMessages: (backend.state.messages || []).length>0
+    property bool canStop: backend.busy || backend.voiceState!=="idle"
     width: libraryOpen || detailOpen ? Math.min(940,Screen.width-40) : Math.min(560,Screen.width-40)
     height: libraryOpen || detailOpen ? Math.min(680,Screen.height-60) : Math.min(hasMessages?550:420,Screen.height-60)
     visible: false
@@ -153,7 +154,7 @@ ApplicationWindow {
                     ColumnLayout {
                         spacing:2;Layout.fillWidth:true
                         Label{text:"clicky";Layout.fillWidth:true;font.pixelSize:21;font.weight:Font.DemiBold;font.letterSpacing:-0.7;color:"#edf1e8"}
-                        Label{text:backend.voiceState==="recording"?qsTr("Listening · local transcription"):backend.busy?qsTr("Working with you…"):qsTr("A little buddy for your desktop");Layout.fillWidth:true;elide:Text.ElideRight;font.pixelSize:10;color:"#9bab9a"}
+                        Label{text:backend.voiceState==="recording"?qsTr("Listening · local transcription"):backend.voiceState==="transcribing"?qsTr("Transcribing locally…"):backend.busy?qsTr("Working with you…"):qsTr("A little buddy for your desktop");Layout.fillWidth:true;elide:Text.ElideRight;font.pixelSize:10;color:"#9bab9a"}
                     }
                     SmallButton{objectName:"historyToggle";text:"≡";Accessible.name:qsTr("Conversation history");checkable:true;checked:win.libraryOpen;onClicked:win.libraryOpen=!win.libraryOpen}
                     SmallButton{text:"⚙";Accessible.name:qsTr("Settings");onClicked:settingsDialog.open()}
@@ -170,7 +171,7 @@ ApplicationWindow {
                     Label{text:qsTr("What are we working on?");font.pixelSize:22;font.weight:Font.Medium;Layout.fillWidth:true;color:"#e7ecdf"}
                     Label{text:(backend.state.provider || {}).model?qsTr("Ask, talk, or bring a piece of your screen."):qsTr("Your buddy is ready. Connect a model in Settings to chat.");wrapMode:Text.Wrap;Layout.fillWidth:true;font.pixelSize:12;color:"#95a591"}
                     RowLayout {
-                        SmallButton{text:qsTr("Meet your buddy");onClicked:{companion.enabled=true;companion.tour();closeOverlay()}}
+                        SmallButton{text:qsTr("Connected tools");onClicked:toolsDialog.open()}
                         SmallButton{text:qsTr("Connect model");visible:!(backend.state.provider || {}).model;onClicked:settingsDialog.open()}
                     }
                 }
@@ -213,7 +214,7 @@ ApplicationWindow {
                     SmallButton{objectName:"voiceButton";text:backend.voiceState==="recording"?qsTr("■ Finish"):qsTr("● Talk");enabled:!backend.busy && backend.voiceState!=="transcribing";highlighted:backend.voiceState==="recording";onClicked:backend.send({cmd:backend.voiceState==="recording"?"record_stop":"record_start"})}
                     SmallButton{text:qsTr("Inspect");enabled:!backend.busy && input.text.trim().length>0;onClicked:inspectRequest()}
                     Item{Layout.fillWidth:true}
-                    SmallButton{objectName:"reviewButton";text:backend.busy?qsTr("Stop"):qsTr("Ask ↵");highlighted:true;enabled:backend.busy || input.text.trim().length>0;onClicked:{if(backend.busy){companion.clear();backend.send({cmd:"cancel"})}else submit()}}
+                    SmallButton{objectName:"reviewButton";text:win.canStop?qsTr("Stop"):qsTr("Ask ↵");highlighted:true;enabled:win.canStop || input.text.trim().length>0;onClicked:{if(win.canStop){companion.clear();backend.send({cmd:"cancel"})}else submit()}}
                 }
                 RowLayout {
                     Rectangle{width:5;height:5;radius:3;color:(backend.state.provider || {}).model?theme.accent:"#6c786a"}
@@ -297,12 +298,12 @@ ApplicationWindow {
             Label { text:backend.speechStatus;wrapMode:Text.Wrap;Layout.fillWidth:true;font.pixelSize:12;color:theme.accent }
             Label { text:win.notice;wrapMode:Text.Wrap;Layout.fillWidth:true;font.pixelSize:11 }
             RowLayout {
-                Switch {text:qsTr("Pointer buddy");checked:companion?companion.enabled:false;onToggled:if(companion)companion.enabled=checked}
-                SmallButton {text:qsTr("Try pointing");onClicked:companion.tour()}
+                Switch {text:qsTr("Visual guides · on demand");checked:companion?companion.enabled:false;onToggled:if(companion)companion.enabled=checked}
+                SmallButton {text:qsTr("Try guide");enabled:companion && companion.enabled;onClicked:companion.tour()}
                 SmallButton {text:qsTr("Mute");onClicked:backend.mute()}
                 SmallButton {text:qsTr("Window info");onClicked:backend.windowContext()}
             }
-            Label {text:companion && companion.available?qsTr("Hyprland cursor tracking connected · overlay passes clicks through"):qsTr("Cursor tracking unavailable in this session");font.pixelSize:10;wrapMode:Text.Wrap;Layout.fillWidth:true;color:theme.accent}
+            Label {text:companion && companion.available?qsTr("Optional hints only · no cursor tracking or follower"):qsTr("Visual hints unavailable in this session");font.pixelSize:10;wrapMode:Text.Wrap;Layout.fillWidth:true;color:theme.accent}
             SmallButton {text:qsTr("Quit Clicky");onClicked:backend.quit()}
             Item { Layout.fillHeight:true }
         }
