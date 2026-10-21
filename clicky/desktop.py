@@ -6,6 +6,7 @@ import os
 import re
 import signal
 import stat
+import struct
 import tempfile
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -131,9 +132,18 @@ class DesktopBroker:
             geometry=(await command(["slurp"],45,1000)).strip()
             if not re.fullmatch(r"-?\d+,-?\d+ \d+x\d+",geometry): raise ValueError("Region selection cancelled")
             argv=["grim","-g",geometry,str(path)]
+            x,y,w,h=map(int,re.findall(r'-?\d+',geometry))
+            bounds={'x':x,'y':y,'width':w,'height':h}
         else:
             monitors=json.loads(await command(["hyprctl","monitors","-j"],3))
             chosen=next((m for m in monitors if m.get('focused')),monitors[0])
             argv=["grim","-o",chosen['name'],str(path)]
+            rotated=chosen.get('transform',0) in {1,3,5,7}
+            w,h=(chosen['height'],chosen['width']) if rotated else (chosen['width'],chosen['height'])
+            bounds={'x':chosen['x'],'y':chosen['y'],'width':w/chosen['scale'],'height':h/chosen['scale']}
         await command(argv,8);path.chmod(0o600)
-        return {"path":str(path),"bytes":path.stat().st_size,"mime":"image/png","source":"explicit region" if region else "explicit focused monitor"}
+        with path.open('rb') as image: header=image.read(24)
+        if header[:8]!=b'\x89PNG\r\n\x1a\n': raise ValueError('Screen capture did not produce a PNG')
+        width,height=struct.unpack('>II',header[16:24])
+        return {"path":str(path),"bytes":path.stat().st_size,"mime":"image/png","source":"explicit region" if region else "explicit focused monitor",
+                "bounds":bounds,"pixels":{"width":width,"height":height}}

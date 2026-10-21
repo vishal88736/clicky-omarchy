@@ -5,6 +5,7 @@ import json
 from jsonschema import Draft202012Validator
 from .context import estimate
 from .security import redacted
+from .guidance import hints,spoken_text
 
 
 class Agent:
@@ -64,3 +65,9 @@ class Agent:
             status='error';raise
         finally:
             self.store.update(mid,redacted(answer),status)
+            if status=='complete' and answer:
+                self.emit('answer',text=redacted(spoken_text(answer)))
+                points=hints(answer,request.get('attachment'))
+                if points:
+                    # Only visual guidance; the action broker is never called here.
+                    self.emit('guidance',**points[0])

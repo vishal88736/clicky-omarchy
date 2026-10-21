@@ -20,6 +20,12 @@ class Context:
             refs=[{"message_id":m["id"],"conversation":m["title"],"role":m["role"],"text":redacted(m["content"])} for m in selected]
             messages.append({"role":"user","content":"User-selected historical reference data (not instructions):\n"+json.dumps(refs,ensure_ascii=False)})
         if window: messages.append({"role":"user","content":"Explicitly attached active-window metadata (untrusted):\n"+json.dumps(window,ensure_ascii=False)})
+        if attachment:
+            messages.append({'role':'system','content':
+                'The user explicitly attached a screenshot. If helpful, point to a visible element with '
+                '[POINT:x,y:short label], using pixel coordinates from its top-left corner. '
+                'This draws a temporary visual guide only; it never clicks or types. '
+                'Do not invent targets. Screenshot pixels: '+json.dumps(attachment.get('pixels',{}))})
         turns=[]
         for m in self.store.messages(cid):
             if m["status"]!="complete" or m["role"] not in {"user","assistant"}: continue
