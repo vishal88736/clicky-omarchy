@@ -2,106 +2,147 @@
 
 # Clicky for Omarchy
 
-[![Protocol and security tests](https://github.com/vishal88736/clicky-omarchy/actions/workflows/tests.yml/badge.svg)](https://github.com/vishal88736/clicky-omarchy/actions/workflows/tests.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Tests](https://github.com/vishal88736/clicky-omarchy/actions/workflows/tests.yml/badge.svg)](https://github.com/vishal88736/clicky-omarchy/actions/workflows/tests.yml)
+[![MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 
-A native Qt Quick assistant for **Omarchy and Hyprland**. Keep conversations and drafts, choose exactly which past messages become context, preview screen captures, and approve real MCP actions before they run.
+A native desktop assistant for **Omarchy / Hyprland**. Open a compact prompt to
+type, talk, attach a screen capture, or ask a connected tool for help.
 
-**No LLM is bundled.** Connect your own OpenAI-compatible local endpoint for chat. Local model installation was deferred in this implementation, so live model answers, model-driven tool selection and vision understanding remain unverified. The interface, persistence, real MCP transports and desktop integration are implemented and tested; an HTTP test fixture is never presented as a model.
+**There is no cursor follower.** No background cursor tracking or idle desktop
+overlay runs. Optional, temporary visual hints are disabled by default.
 
-## What works
+Inspired by [Jason Kneen's OpenClicky](https://github.com/jasonkneen/openclicky),
+built natively for Wayland with **C++ / Qt Quick and layer-shell-qt**.
 
-| Capability | Evidence / boundary |
-|---|---|
-| Native floating window, launcher, background user service | Tested in the real Hyprland Wayland session; no XWayland UI |
-| History sidebar, saved drafts, explicit context, request preview | SQLite and native UI tests; historical browsing does not import context |
-| Real MCP stdio, Streamable HTTP and SSE | Actual SDK connections, multiple servers, discovered tools and executed results |
-| Reviewed actions | Real writes tested denied/approved/disabled during review; cancellation tested |
-| Screen preview and local OCR | Real grim capture and Tesseract recognition tested; region-selection flow still needs manual verification |
-| Local voice input | Microphone format tested; installed Voxtype recognized a public speech sample |
-| Local model adapter | Streaming, tool loops, cancellation, errors and context tested against a labeled HTTP fixture; live LLM pending |
-| Global shortcut | Super+Ctrl+Semicolon registered without conflict; physical-key activation still needs confirmation |
-| Speech playback | Implemented with real-engine detection; unavailable here because speech-engine libraries are missing |
+## What it does
 
-![Real connected MCP tools](artifacts/tools.png)
+- **On-demand interface:** a hotkey opens the prompt; Escape dismisses it. Nothing follows the pointer.
+- **Compact prompt:** Enter to ask, Shift+Enter for a new line, Ctrl+Enter to inspect
+  the exact request. Escape hides the prompt.
+- **Conversation drawer:** search history, switch conversations, keep drafts,
+  explicitly choose individual historical messages, remove selections and start fresh.
+- **Screen context:** capture a monitor or region, preview locally, optionally OCR,
+  and review before sending to a verified vision model. Screenshot-relative
+  `[POINT:x,y:label]` hints can display a temporary marker when Visual guides is
+  explicitly enabled. Markers disappear after a few seconds and never follow the pointer.
+- **Real MCP:** negotiate and discover tools over stdio, Streamable HTTP or SSE;
+  enable individual tools; inspect arguments and approve each invocation once.
+- **Local voice input:** PipeWire recording and installed Voxtype transcription into
+  the draft. A real installed Qt speech engine is needed for spoken playback.
+- **Omarchy integration:** live accent, launcher entry, global shortcut, optional
+  user service, and a floating prompt pinned across workspaces.
 
-Screenshots are rendered from the real app with fresh temporary data and the default accent. No personal desktop capture or history is published.
+**Connect your own model to enable AI answers.** OpenAI-compatible local endpoints
+and HTTPS hosted endpoints are supported. No model is downloaded or selected
+silently. Live neural chat and vision remain unverified on the development machine
+because model setup was deferred; HTTP fixtures are clearly labeled in the tests.
 
 ## Build and launch
-
-On the audited Omarchy installation, all desktop packages were already available. Python dependencies are isolated in `.venv`.
 
 ```sh
 git clone https://github.com/vishal88736/clicky-omarchy.git
 cd clicky-omarchy
 bin/build
-bin/test
-bin/test-ui
 bin/clicky open
 ```
 
-Requirements: Python **3.14**, uv, qmake6, make and Qt **6.12** Core/Gui/Qml/Quick/Controls/Network/TextToSpeech, plus Qt Test for the native harness. Desktop helpers are detected and failures are shown in the UI. See [installation and dependencies](docs/installation.md).
-
-Install the user-local launcher, app icon, shortcut and optional autostart service:
+Requires Python 3.14, uv, qmake6, make, Qt 6.12 (Quick, Controls, Network,
+TextToSpeech, Wayland), and **layer-shell-qt**. Python dependencies live in `.venv`.
+Capture, OCR and microphone helpers are detected separately. See the
+[dependency and installation guide](docs/installation.md).
 
 ```sh
-bin/install
+bin/install                 # launcher, hotkey, optional autostart
 clicky open
-clicky check --json
+clicky guides               # opt in/out of temporary visual hints (default off)
+clicky hide                 # hide only the prompt
+clicky info                 # non-secret UI and guidance flags
 ```
 
-Default shortcut: **Super+Ctrl+Semicolon**. Existing bindings are checked, backed up and preserved. The installer adds one marked Lua block, validates Hyprland and refuses file collisions. Use `--no-autostart` or a custom `--hotkey` on a fresh installation. Keep the checkout in place while installed.
+Default shortcut: **Super + Ctrl + Semicolon**. On a fresh installation, use
+`bin/install --hotkey 'SUPER + CTRL + F12'` or `--no-autostart`.
+Existing shortcuts are checked for conflicts. Only a marked user configuration
+block is added; the installer keeps a backup and an ownership manifest.
 
-## Connect your model
+## Connect a model
 
-Open **Settings**, enter the endpoint URL (including `/v1`), exact model ID and actual context limit, then save. **Discover models** checks connectivity. Run the separate **text**, **stream**, **tools** and **vision** probes for the capabilities you need. They use synthetic, non-private content and do not execute desktop actions.
+Open **Settings** (gear), set the endpoint including `/v1`, exact model name and
+actual context limit, then save. **Discover models** tests connectivity. Run the
+separate **text**, **stream**, **tools**, and **vision** probes for the capabilities
+needed; they use synthetic data. A listed model is not proof of those capabilities.
 
-Type a question, choose **Review & send**, inspect the exact messages/tool schemas/endpoint, and confirm. Optional credentials use the masked key field and GNOME Keyring. No remote fallback, paid subscription or imported Codex/Claude credentials are required. `config.example.json` contains placeholders only.
+Optional API keys use a masked field backed by GNOME Keyring. Configuration stores
+endpoint-scoped references. Keys are never committed, passed in process arguments,
+or silently forwarded when the endpoint changes. See [config.example.json](config.example.json).
 
-## Everyday controls
+Typed text is submitted with **Ask / Enter**. **Inspect / Ctrl+Enter** shows the
+assembled context, endpoint, tools and budget before submission. A screen attachment
+always opens the request review first. Screenshots, clipboard contents and window
+titles are never automatically attached.
 
-| Control | Action |
-|---|---|
-| Ctrl+Enter | Preview a request before sending |
-| Ctrl+N / Ctrl+K | New conversation / search history |
-| Context beside an older conversation | Explicitly select individual historical messages |
-| Screen / Region / Window info | Deliberately attach local context for review |
-| OCR | Extract screenshot text locally into the draft |
-| Talk / Finish recording | Record locally, transcribe with Voxtype, review the draft |
-| Tools / Activity | Inspect connections, schemas, toggles, approvals and results |
-| Ctrl+. / Mute | Cancel operations / stop speech |
-| Escape / close button | Hide while preserving the session |
-| Ctrl+Shift+Q | Quit |
+## History and tools
 
-## Permissions and integrations
+Open **≡** or **Ctrl+K** for the persistent sidebar. **Open** resumes a conversation;
+**+ Context** lets you check individual messages for use in the current one.
+Browsing a conversation does not import it. Selected context stays visible and each
+selection can be removed. **Fresh context** clears historical references;
+**Clear chat** asks before deleting that conversation's local messages.
 
-Every tool call requires a one-use approval, including reads that can disclose data. The two bundled MCP servers provide root-constrained filesystem/Git tools and a dedicated narrow desktop broker. Initial filesystem access is limited to this project's `docs/`. There is no arbitrary shell, recursive delete, continuous capture or clipboard scraping. Pointer movement and restricted single-line typing are separate from general mouse/key automation; typing is disabled by default and terminal/editor hosts are denied.
+![Conversation drawer](artifacts/history.png)
 
-Add trusted stdio, HTTP or SSE servers without changing application code. Credentials use environment/Keyring references. External stdio servers run with your OS account's permissions; Clicky cannot sandbox arbitrary server code. Browser automation can be connected, but no third-party browser-control server was installed or tested here. See [MCP setup](docs/mcp.md) and [security boundaries](docs/security.md).
+The **MCP** button shows actual connection states, discovered schemas and tool
+switches. Two bundled official-SDK servers provide root-constrained filesystem/Git
+operations and a separate narrow desktop broker. Manual invocation works without
+an LLM. Add trusted servers in the UI or configuration; see [MCP setup](docs/mcp.md).
+Every tool invocation requires review, including read operations that could disclose
+private data. There is no unrestricted agent shell.
 
-Local history/drafts live in `~/.local/share/clicky/history.sqlite3`; configuration is in `~/.config/clicky/config.json`. Both use private filesystem permissions. The app does not encrypt the database. Captures/audio are temporary; detailed tool payloads are not stored in diagnostic logs. Redaction is best effort, so do not put credentials into chat or selected screenshots.
+![Connected MCP tools](artifacts/tools.png)
 
-## Tests and current limits
+## Verification
 
-Local Python suite: **21 passed**, including real MCP transports, real approved/denied writes, credential isolation, persistence, context isolation, provider fixtures and native IPC/SIGTERM shutdown. The separate native Qt harness passes both interaction scenarios (QtTest reports 4 entries including init/cleanup). GitHub CI runs the Python suite and skips only the two native-binary lifecycle cases; native UI and live desktop checks are local. Read the [full validation record and acceptance matrix](docs/validation.md).
+```sh
+bin/test                    # Python unit + real MCP integration tests
+bin/test-ui                 # native Qt interactions and streaming HTTP fixture
+.venv/bin/python scripts/verify_desktop.py  # active desktop; read-only checks
+```
 
-Remaining checks: connect a real local model, verify physical hotkey activation and interactive region selection, install/verify a real TTS engine if desired, and register/test any external browser MCP server. English is complete for the initial interface; the bundled Hindi catalog is partial and falls back to English.
+Current local results: **23 Python tests passed**; **3 native UI scenarios and a guidance-controller case passed**
+(QtTest reports 6 entries including setup/cleanup). These cover real MCP sessions,
+permissions, context isolation, actual typed HUD input, streaming through a labeled
+HTTP fixture, persistence, restart, and cancellation/failure paths.
+
+The native application has been run in the actual Hyprland session. The desktop
+check verifies the real app ID, floating/pinned window, clean session configuration,
+and absence of any cursor-following surface. It does not inject input. Optional
+visual hints support dynamic screen geometry, but physical multi-monitor/hotplug
+acceptance remains manual.
+
+Screenshots above are real QML renders with isolated temporary data and the fallback
+accent. No personal desktop/history is published.
+See [current validation and limitations](docs/validation.md) for exact evidence and
+manual checks: real model inference/vision, physical hotkey, interactive region
+selection, browser MCP, and audible speech.
 
 ## Stop and uninstall
 
 ```sh
-systemctl --user stop clicky.service
-systemctl --user disable --now clicky.service
-bin/uninstall
+systemctl --user stop clicky.service       # service-managed instance
+bin/clicky stop                            # directly launched instance
+bin/uninstall                              # removes owned integration only
 ```
 
-For a directly launched instance, use `clicky stop`. Uninstall removes only verified app-owned integration files and its marked bindings block. It preserves history, settings, Keyring entries, the checkout and original-config backups. Live reversal restored the original bindings byte for byte, followed by a clean reinstall. See [troubleshooting and data removal](docs/troubleshooting.md).
+Uninstall preserves conversations, configuration, Keyring entries, backups and this
+checkout. See [clean reversal](docs/troubleshooting.md). The old large chat shell
+and its outdated screenshots have been replaced; existing conversation data remains
+compatible.
 
-## Project map
+## Design and credits
 
-- `src/`: native lifecycle, Qt Quick UI, theme, locale and TTS.
-- `clicky/`: provider, context, storage, agent, MCP manager/servers, desktop broker, voice and permissions.
-- `tests/`: unit, real transport/action integration, provider-fixture and native UI/lifecycle tests.
-- `docs/`: [actual system audit](docs/system-audit.md), [architecture](docs/architecture.md), [source/license review](docs/source-review.md), installation, security, MCP and troubleshooting.
+[System audit](docs/system-audit.md) · [Rebuild audit and plan](docs/buddy-rebuild.md) ·
+[Architecture](docs/architecture.md) · [Source review](docs/source-review.md) ·
+[Security](docs/security.md) · [Troubleshooting](docs/troubleshooting.md)
 
-MIT licensed. Independent of HeyClicky and OpenClicky. No code from the unlicensed HeyClicky Linux repository is included. Native theme behavior follows Omarchy's MIT app templates; attribution is preserved in [LICENSE](LICENSE).
+Interaction inspiration: OpenClicky by **Jason Kneen** and the original Clicky by
+**Farza**. This is an original Linux implementation; macOS source/artwork is not
+bundled. [MIT license](LICENSE) · [Third-party notices](THIRD_PARTY_NOTICES.md).

@@ -1,6 +1,34 @@
-# Clicky architecture
+# Clicky architecture — desktop buddy
 
 Clicky is a native Qt Quick Wayland application backed by a private Python worker. No HTTP control server is exposed by the application. C++ manages window lifecycle, single-instance local IPC, theme/language integration, process supervision and local TTS; QML provides the functional interface. Python owns the agent, persistence and official MCP SDK. This additional worker is justified by the maintained SDK and keeps the UI independent of providers and tool transports. The installed Qt toolchain avoids Electron and additional system packages. Application directories are modular rather than forcing all agent logic into the native UI.
+
+## Native prompt and optional visual hints
+
+The interactive prompt is a native xdg window with an expandable conversation
+sidebar. Model/MCP dialogs use bounded, scrollable panels. Its user rule floats
+and pins only the Clicky app ID, without modifying packaged Omarchy files.
+
+**Cursor following was removed at the user's request.** There is no cursor IPC
+polling, pointer-position subscription or idle overlay. Normal responses and
+voice status remain inside the prompt. A fresh installation and this user's
+saved preference both have visual hints disabled.
+
+The retained `Companion` controller handles only optional, temporary visual hints.
+It creates layer-shell views lazily when an explicitly enabled hint is displayed.
+Those surfaces use keyboard interactivity None, an exclusive zone of -1 and Qt
+WindowTransparentForInput; they unmap when the hint expires or is cancelled.
+They display only the supplied target, never the real cursor location.
+
+Reviewed captures record logical desktop bounds and actual PNG dimensions.
+Assistant `[POINT:x,y:label]` / `[TYPE:x,y:label]` hints are interpreted only when
+that request included a capture. Finite, in-image points map back to logical
+coordinates; the first valid hint can display a marker for 6.5 seconds if enabled.
+These hints never invoke desktop input. `buddy.ini` retains the opt-in preference.
+No screenshot or window metadata is attached automatically.
+
+Enter/Ask submits deliberate typed text after context assembly. Inspect/Ctrl+Enter
+opens the exact request. Any attached screenshot forces review before submission.
+The existing context and one-use tool approval boundaries are shared by both paths.
 
 ## Data and trust boundaries
 
@@ -18,11 +46,11 @@ The agent loops through model tool calls, validates JSON against discovered sche
 
 The official Python MCP SDK negotiates protocol capabilities, lists schemas and calls tools over stdio, Streamable HTTP and SSE. Connections are owned by dedicated async tasks so SDK cancel scopes are opened and closed in the same task. Each connection uses a request queue. Reconnect is explicit after failure. Stdio executables are trusted code with the same OS privileges as the user; root restrictions on bundled tools cannot constrain an arbitrary external server. Register only trusted servers. Config references environment variables or Keyring entries instead of storing secret values.
 
-Bundled real SDK servers provide bounded, root-constrained file reading/listing, fixed read-only Git operations and a safe second diagnostics connection. A dedicated local action broker separately validates supported Hyprland focus/window actions, app/URL opening, approved argv templates, capture and optional input. There is no arbitrary shell. Desktop actions cannot silently capture or attach context; every capture returns a local preview. wtype support is detected through a harmless capability check where possible, otherwise marked unverified/unavailable. No raw global mouse injector is installed.
+Bundled real SDK servers provide bounded, root-constrained file reading/listing/writing and fixed read-only Git operations in one server, plus a separate desktop server. A dedicated local action broker separately validates supported Hyprland focus/window actions, app/URL opening, approved argv templates, capture and optional input. There is no arbitrary shell. Desktop actions cannot silently capture or attach context; every capture returns a local preview. wtype support is detected through a harmless capability check where possible, otherwise marked unverified/unavailable. No raw global mouse injector is installed.
 
 ## Desktop and voice
 
-The application runs persistently with a hidden window when started by its optional user service. A local socket accepts only fixed lifecycle verbs; it cannot execute code. A global Hyprland keybinding launches/toggles the same instance. Escape hides, Stop cancels generation, pending approvals, capture/transcription and speech. Window rules match the app ID only and use the installed Lua conventions; dimensions come from available screen geometry. User installation creates a launcher and optional service, adds only a marked integration block, preserves existing file content and records owned files. Uninstall removes only that block and files whose content matches its manifest.
+The application runs persistently with a hidden window when started by its optional user service. A local socket accepts only fixed lifecycle and optional-guidance verbs; it cannot execute code. A global Hyprland keybinding launches/toggles the same instance. Escape hides, Stop cancels generation, pending approvals, capture/transcription and speech. Window rules match the app ID only and use the installed Lua conventions; dimensions come from available screen geometry. User installation creates a launcher and optional service, adds only a marked integration block, preserves existing file content and records owned files. Uninstall removes only that block and files whose content matches its manifest.
 
 Screen capture is initiated by the user, hides the assistant during capture, previews the image locally, and submits only through an explicit send action to a verified vision provider. Active-window metadata and OCR are separately opted in. Capture never reads the clipboard. Recording uses pw-record into a temporary mono 16kHz WAV with a duration limit; Voxtype transcribes that file in a subprocess with local inference, without changing the existing daemon or typing into other apps. Transcription fills the draft for review. Qt TextToSpeech lists actual engines/voices; playback remains unavailable if no installed voice engine works. No paid voice service is required or silently selected.
 

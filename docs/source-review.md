@@ -17,3 +17,20 @@ Actual public repository source, package definitions and license files were insp
 Sources: [HeyClicky repository](https://github.com/asemfateen/Heyclicky_linux), [brain.py](https://github.com/asemfateen/Heyclicky_linux/blob/main/src/brain.py), [overlay.py](https://github.com/asemfateen/Heyclicky_linux/blob/main/src/overlay.py), [capture.py](https://github.com/asemfateen/Heyclicky_linux/blob/main/src/capture.py), [setup.sh](https://github.com/asemfateen/Heyclicky_linux/blob/main/src/setup.sh); [OpenClicky](https://github.com/prasanthsasikumar/openclicky), [license](https://github.com/prasanthsasikumar/openclicky/blob/main/LICENSE), [Linux package](https://github.com/prasanthsasikumar/openclicky/blob/main/linux/pyproject.toml), [X11 integration](https://github.com/prasanthsasikumar/openclicky/blob/main/linux/openclicky_linux/x11.py), [screen capture](https://github.com/prasanthsasikumar/openclicky/blob/main/linux/openclicky_linux/screen.py), [provider adapter](https://github.com/prasanthsasikumar/openclicky/blob/main/linux/openclicky_linux/ask.py), [configuration](https://github.com/prasanthsasikumar/openclicky/blob/main/linux/openclicky_linux/config.py). These are inspection findings, not upstream end-to-end test results.
 
 SDK source and installed signatures were checked against the [official Python SDK](https://github.com/modelcontextprotocol/python-sdk). The installed 2.3 API uses MCPServer, snake_case model attributes and httpx2 for its HTTP client. Window-rule documentation was consulted at the [official Hyprland wiki](https://wiki.hypr.land/Configuring/Basics/Window-Rules/); installed Omarchy Lua helpers are the authoritative syntax for this system.
+
+## Jason Kneen OpenClicky — 21 October 2026
+
+The newly supplied reference is a different repository from the Linux projects
+above: [jasonkneen/openclicky](https://github.com/jasonkneen/openclicky), inspected
+at `e9eb06a29ff5cd82033d032238f51a936168b05a`. Its MIT license, actual overlay,
+response caption and visual guidance source were reviewed. The companion uses
+mouse-ignoring, non-key AppKit windows per display. SwiftUI, ScreenCaptureKit and
+macOS TCC are platform-specific; they cannot be reused as a Linux desktop backend.
+
+The cursor companion, temporary pointing and compact HUD interaction informed the
+new original Qt/layer-shell implementation. No Swift source, art or prompts were
+copied. Genuine official-SDK MCP, secure provider configuration, SQLite context
+and the Linux voice pipeline are retained from the tested local implementation.
+The reference's local HTTP bridge advertises MCP-style tools, which does not itself
+prove negotiated MCP transport support. See [the rebuild audit](buddy-rebuild.md)
+and [third-party notices](../THIRD_PARTY_NOTICES.md).

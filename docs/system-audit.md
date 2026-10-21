@@ -1,3 +1,5 @@
+> Updated desktop-buddy re-audit: [21 October 2026](buddy-rebuild.md). Omarchy is now 4.0.0.r7195.g3ac4365; this original report records the initial implementation audit.
+
 # System audit — 2026-10-19
 
 Read-only inspection completed before project creation. No packages, settings, services, capture, microphone recording, or credentials were changed during the audit. Only this new project and its documents were then created.

@@ -54,3 +54,13 @@ and its screenshots are superseded.
 Provider setup remains deferred as requested. No new LLM download or credential
 reuse is authorized by that earlier choice. Live inference must be marked
 blocked until an endpoint and model are configured; fixtures are labeled as such.
+
+## User correction and final behavior
+
+The initial implementation included a pointer-following companion. The user then
+explicitly requested its removal. It was disabled immediately, and Hyprland's
+actual layer inventory confirmed it was unmapped. Continuous cursor IPC, polling,
+following coordinates and idle overlay creation were then removed from source.
+The final application uses the compact HUD and history drawer. Temporary visual
+hints are optional and disabled by default; they never follow the pointer.
+The earlier sequence above records the original design, not the final behavior.

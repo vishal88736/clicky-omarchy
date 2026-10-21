@@ -6,7 +6,7 @@ Filesystem changes are limited to explicitly configured roots; writes are atomic
 
 Historical selections, screenshots, webpage/file content and tool results are untrusted data. They do not become system instructions. The provider sees current conversation text and only explicitly selected historical messages. Selecting a history row never imports its entire context. Request preview shows the exact messages, schemas, endpoint and budget; image bytes are represented by the local preview, length and SHA-256. The captured image is frozen into the reviewed request. No screen, clipboard or active-window title is automatically attached.
 
-Application control is a private user-only local socket accepting fixed show/hide/toggle/status/stop verbs. Agent/UI traffic uses inherited pipes. Remote endpoints require TLS; redirects and environment proxy inheritance are disabled. API keys use GNOME Keyring or explicit environment references, never process arguments or configuration JSON. The key field clears after submission. Existing credential stores are not harvested.
+Application control is a private user-only local socket accepting fixed show/hide/toggle/status/info/stop/tour/guides verbs (buddy is a legacy alias for guides). Agent/UI traffic uses inherited pipes. Remote endpoints require TLS; redirects and environment proxy inheritance are disabled. API keys use GNOME Keyring or explicit environment references, never process arguments or configuration JSON. The key field clears after submission. Existing credential stores are not harvested.
 
 Provider keys are referenced by an endpoint-derived Keyring identifier. Changing the endpoint clears the active credential reference; it never silently forwards a key from one provider to another. The old Keyring entry is retained, and the user must explicitly supply a credential for the new endpoint. Legacy unscoped references are cleared without deleting the stored secret.
 
@@ -15,3 +15,10 @@ History lives in a private directory with a 0600 SQLite database. Schema migrati
 Captures/recordings live in a private temporary runtime directory, are never committed and are removed on cancellation/normal shutdown. If the app is killed forcibly, an orphaned private runtime directory can remain until session/runtime cleanup. Detailed action results are kept in the current UI session; persistent activity records contain tool/status/time only, without sensitive argument/result bodies. Third-party diagnostics are not copied wholesale into app logs.
 
 The official SDK establishes MCP protocol correctness; it does not make external code safe. A trusted stdio server has your normal OS permissions before any tool approval. Clicky does not claim to be a sandbox for arbitrary MCP servers or a complete defense against prompt injection. Connect only code you trust and retain the approval boundary.
+
+Cursor-following and continuous cursor IPC have been removed. There is no idle
+overlay or continuous pointer sampling. Optional visual guides are disabled by default, require
+a reviewed screenshot request or an explicit test button, disappear automatically,
+and cannot click or type. Real desktop input remains a separate approval-gated
+tool. `info` reveals UI geometry and guidance flags, never conversation text,
+credentials or window titles.

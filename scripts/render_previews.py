@@ -8,7 +8,7 @@ ROOT=Path(__file__).resolve().parent.parent
 
 
 def main():
-    for language,panel,name in [('en','','preview.png'),('en','toolsDialog','tools.png'),('hi','','preview-hi.png')]:
+    for language,panel,name in [('en','','preview.png'),('en','library','history.png'),('en','toolsDialog','tools.png'),('en','settingsDialog','settings.png')]:
         with tempfile.TemporaryDirectory(prefix='clicky-preview-') as d:
             lang=Path(d)/'language';lang.write_text(language)
             env=os.environ|{'QT_QPA_PLATFORM':'offscreen','QT_QUICK_BACKEND':'software','QT_FORCE_STDERR_LOGGING':'1',

@@ -12,7 +12,7 @@ ApplicationWindow {
     property bool hasMessages: (backend.state.messages || []).length>0
     property bool canStop: backend.busy || backend.voiceState!=="idle"
     width: libraryOpen || detailOpen ? Math.min(940,Screen.width-40) : Math.min(560,Screen.width-40)
-    height: libraryOpen || detailOpen ? Math.min(680,Screen.height-60) : Math.min(hasMessages?550:420,Screen.height-60)
+    height: libraryOpen || detailOpen ? Math.min(680,Screen.height-60) : Math.min(hasMessages?550:(backend.state.attachment || backend.state.window)?480:420,Screen.height-60)
     visible: false
     flags: Qt.Window | Qt.FramelessWindowHint
     title: "Clicky"
@@ -167,13 +167,14 @@ ApplicationWindow {
                     Label{id:errorLabel;anchors.fill:parent;anchors.margins:9;text:backend.error;textFormat:Text.PlainText;color:"#f4c8b7";wrapMode:Text.Wrap;font.pixelSize:11;TapHandler{onTapped:backend.dismissError()}}
                 }
                 ColumnLayout {
-                    visible:!win.hasMessages;Layout.fillWidth:true;Layout.fillHeight:true;spacing:5
+                    visible:!win.hasMessages && !backend.error.length;Layout.fillWidth:true;Layout.fillHeight:true;spacing:5
                     Label{text:qsTr("What are we working on?");font.pixelSize:22;font.weight:Font.Medium;Layout.fillWidth:true;color:"#e7ecdf"}
                     Label{text:(backend.state.provider || {}).model?qsTr("Ask, talk, or bring a piece of your screen."):qsTr("Your buddy is ready. Connect a model in Settings to chat.");wrapMode:Text.Wrap;Layout.fillWidth:true;font.pixelSize:12;color:"#95a591"}
                     RowLayout {
                         SmallButton{text:qsTr("Connected tools");onClicked:toolsDialog.open()}
                         SmallButton{text:qsTr("Connect model");visible:!(backend.state.provider || {}).model;onClicked:settingsDialog.open()}
                     }
+                    Item{Layout.fillHeight:true}
                 }
                 ListView {
                     id:messages;objectName:"messageList";visible:win.hasMessages;Layout.fillWidth:true;Layout.fillHeight:true;clip:true;spacing:16

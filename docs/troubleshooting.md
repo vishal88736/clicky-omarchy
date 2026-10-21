@@ -16,7 +16,7 @@ The default shortcut is **Super+Ctrl+Semicolon**. Live registration and launcher
 
 ## The model cannot connect
 
-No local LLM server was installed at the user's request. Start your own compatible server and supply its URL and model in Settings. Save first, discover models, then run the text probe. **Review & send** does not send until you confirm the preview. Unverified or unavailable providers report errors and retain the draft. Re-run probes after changing endpoint/model. A provider accepting text is not proof of vision/tool support.
+No local LLM server was installed at the user's request. Start your own compatible server and supply its URL and model in Settings. Save first, discover models, then run the text probe. **Inspect / Ctrl+Enter** opens a request preview. **Ask / Enter** submits deliberate typed messages; an attached screenshot always requires preview confirmation. Unverified or unavailable providers report errors and retain the draft. Re-run probes after changing endpoint/model. A provider accepting text is not proof of vision/tool support.
 
 If the context budget is exceeded, remove historical selections, disable unused tool schemas, reduce input, or set the model's actual supported context size. Do not increase the limit beyond what the server/model supports. Tool-result growth can stop a round before a second provider request; this is intentional.
 
@@ -50,3 +50,13 @@ bin/uninstall
 This stops/disables Clicky, removes only its verified owned launcher, icon, service and integration file, removes only the marked bindings block, reloads/validates Hyprland, and preserves history/settings and the private original-config backup. It refuses removal if an owned file/block was modified, so review those changes first. It never resets Omarchy configuration. Live reversal was tested against the original bindings hash, then the application was reinstalled.
 
 Remaining data: `~/.config/clicky/config.json`, `~/.local/share/clicky/`, backups under `~/.local/state/clicky/backups/`, optional Keyring entries and the source checkout/`.venv`. They are deliberately retained. After reviewing/backing up your data, you can remove those app-specific paths yourself. No purge is performed automatically, and no unrelated file or credential is deleted.
+
+## Confirm the cursor follower is removed
+
+`clicky info` reports `following: false`. The application no longer polls cursor
+coordinates or creates an idle overlay. `hyprctl layers -j` should show neither
+`clicky-buddy` nor `clicky-guidance` during normal use. Visual guides are disabled
+by default; an opted-in target marker expires automatically.
+
+Run `.venv/bin/python scripts/verify_desktop.py` for read-only session verification.
+Use the configured hotkey or launcher to open the assistant.
