@@ -1,6 +1,7 @@
 #include <QGuiApplication>
 #include <QJsonDocument>
 #include <QJsonArray>
+#include <QJsonObject>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickItem>
@@ -13,6 +14,7 @@
 #include "../src/backend.h"
 #include "../src/theme.h"
 #include "../src/translator.h"
+#include "../src/companion.h"
 
 static QQuickItem *visualItem(QQuickItem *root,const QString &name){
     if(root->objectName()==name)return root;
@@ -23,6 +25,34 @@ static QQuickItem *visualItem(QQuickItem *root,const QString &name){
 class UITest:public QObject {
     Q_OBJECT
 private slots:
+    void typedPromptHttpStreamingAndRestart(){
+        QTemporaryDir dir;QVERIFY(dir.isValid());
+        qputenv("CLICKY_CONFIG_HOME",(dir.path()+"/config").toUtf8());qputenv("CLICKY_DATA_HOME",(dir.path()+"/data").toUtf8());qputenv("CLICKY_DISABLE_TTS","1");
+        QProcess fixture;fixture.setWorkingDirectory(QStringLiteral(CLICKY_PROJECT));
+        fixture.start(QStringLiteral(CLICKY_PROJECT)+"/.venv/bin/python",{"-u","tests/ui_provider_fixture.py"});
+        QVERIFY(fixture.waitForReadyRead(5000));const auto port=QJsonDocument::fromJson(fixture.readLine()).object().value("port").toInt();QVERIFY(port>0);
+        QProcess setup;setup.setWorkingDirectory(QStringLiteral(CLICKY_PROJECT));
+        setup.start(QStringLiteral(CLICKY_PROJECT)+"/.venv/bin/python",{"-c",
+            "import sys; from clicky.config import Config; c=Config(); c.provider({'base_url':'http://127.0.0.1:'+sys.argv[1]+'/v1','model':'fixture-not-an-llm','context_tokens':8192,'response_tokens':1024}); c.data['provider'].update(verified={'text':True,'stream':True},stream=True); c.save()",QString::number(port)});
+        QVERIFY(setup.waitForFinished(5000));QCOMPARE(setup.exitCode(),0);
+        QString cid;
+        {
+            Backend backend;Theme theme;Translator translator;QQmlApplicationEngine engine;Companion companion;
+            engine.rootContext()->setContextProperty("backend",&backend);engine.rootContext()->setContextProperty("theme",&theme);engine.rootContext()->setContextProperty("translator",&translator);engine.rootContext()->setContextProperty("companion",&companion);
+            engine.load(QUrl("qrc:/Main.qml"));QVERIFY(!engine.rootObjects().isEmpty());auto *window=qobject_cast<QQuickWindow*>(engine.rootObjects().first());window->show();
+            QTRY_VERIFY_WITH_TIMEOUT(!backend.state().value("conversation").toString().isEmpty(),10000);cid=backend.state().value("conversation").toString();
+            auto *input=window->findChild<QQuickItem*>("messageInput");QVERIFY(input);input->forceActiveFocus();
+            for(char ch:QByteArray("test the typed prompt"))QTest::keyClick(window,ch);
+            QTest::keyClick(window,Qt::Key_Return);
+            QTRY_COMPARE_WITH_TIMEOUT(backend.state().value("messages").toList().size(),2,10000);
+            QTRY_COMPARE_WITH_TIMEOUT(backend.state().value("messages").toList().last().toMap().value("status").toString(),QString("complete"),10000);
+            QCOMPARE(backend.state().value("messages").toList().last().toMap().value("content").toString(),QString("Native UI protocol fixture reply"));
+            QCOMPARE(input->property("text").toString(),QString());backend.shutdown();
+        }
+        Backend restored;QTRY_COMPARE_WITH_TIMEOUT(restored.state().value("conversation").toString(),cid,10000);
+        QCOMPARE(restored.state().value("messages").toList().last().toMap().value("content").toString(),QString("Native UI protocol fixture reply"));restored.shutdown();
+        fixture.terminate();QVERIFY(fixture.waitForFinished(3000));
+    }
     void historicalContextSelectionAndPreview(){
         QTemporaryDir dir;QVERIFY(dir.isValid());
         qputenv("CLICKY_CONFIG_HOME",(dir.path()+"/config").toUtf8());qputenv("CLICKY_DATA_HOME",(dir.path()+"/data").toUtf8());qputenv("CLICKY_DISABLE_TTS","1");
@@ -30,12 +60,20 @@ private slots:
         seed.start(QStringLiteral(CLICKY_PROJECT)+"/.venv/bin/python",{"-c",
             "import json; from clicky.storage import Store; from clicky.config import Config; s=Store(); a=s.new('Test archive'); m=s.add(a,'user','INTENDED_UI_CONTEXT'); s.add(a,'assistant','UNSELECTED_UI_CONTEXT'); b=s.new('Current'); c=Config(); c.data['last_conversation']=b; c.save(); print(json.dumps([a,m,b])); s.close()"});
         QVERIFY(seed.waitForFinished(5000));QCOMPARE(seed.exitCode(),0);const auto data=QJsonDocument::fromJson(seed.readAllStandardOutput()).array();QCOMPARE(data.size(),3);
-        Backend backend;Theme theme;Translator translator;QQmlApplicationEngine engine;
+        Backend backend;Theme theme;Translator translator;Companion companion;QQmlApplicationEngine engine;
+        engine.rootContext()->setContextProperty("companion",&companion);
         engine.rootContext()->setContextProperty("backend",&backend);engine.rootContext()->setContextProperty("theme",&theme);engine.rootContext()->setContextProperty("translator",&translator);
         engine.load(QUrl("qrc:/Main.qml"));QVERIFY(!engine.rootObjects().isEmpty());auto *window=qobject_cast<QQuickWindow*>(engine.rootObjects().first());window->show();
         QTRY_COMPARE_WITH_TIMEOUT(backend.state().value("conversation").toString(),data[2].toString(),10000);
+        window->setProperty("libraryOpen",true);
         const auto addName="addContext_"+data[0].toString();QTRY_VERIFY(visualItem(window->contentItem(),addName));
-        auto click=[&](QQuickItem *item){QTest::mouseClick(window,Qt::LeftButton,Qt::NoModifier,item->mapToScene(QPointF(item->width()/2,item->height()/2)).toPoint());};
+        auto click=[&](QQuickItem *item){
+            // The compact HUD resizes when drawers/popups change. Flush pending
+            // scene polishing before obtaining coordinates for a real click.
+            QTest::qWait(100);window->grabWindow();QTest::qWait(30);
+            auto p=item->mapToScene(QPointF(item->width()/2,item->height()/2)).toPoint();
+            QTest::mouseMove(window,p,30);QTest::mouseClick(window,Qt::LeftButton,Qt::NoModifier,p,30);
+        };
         click(visualItem(window->contentItem(),addName));auto *dialog=window->findChild<QObject*>("contextDialog");QVERIFY(dialog);QTRY_VERIFY(dialog->property("opened").toBool());
         QCOMPARE(backend.state().value("conversation").toString(),data[2].toString());
         const auto selectName="contextSelect_"+QString::number(data[1].toInt());QTRY_VERIFY(visualItem(window->contentItem(),selectName));click(visualItem(window->contentItem(),selectName));
@@ -43,7 +81,12 @@ private slots:
         auto *input=window->findChild<QQuickItem*>("messageInput");QVERIFY(input);input->setProperty("text","question");QMetaObject::invokeMethod(window,"inspectRequest");
         auto *preview=window->findChild<QObject*>("requestDialog");QTRY_VERIFY(preview->property("opened").toBool());
         const auto request=QJsonDocument::fromVariant(window->property("requestPreview")).toJson();QVERIFY(request.contains("INTENDED_UI_CONTEXT"));QVERIFY(!request.contains("UNSELECTED_UI_CONTEXT"));QMetaObject::invokeMethod(preview,"close");QTRY_VERIFY(!preview->property("visible").toBool());
-        const auto removeName="removeContext_"+QString::number(data[1].toInt());QTRY_VERIFY(visualItem(window->contentItem(),removeName));click(visualItem(window->contentItem(),removeName));
+        const auto removeName="removeContext_"+QString::number(data[1].toInt());QTRY_VERIFY(visualItem(window->contentItem(),removeName));
+        QTest::qWait(150);
+        auto *remove=visualItem(window->contentItem(),removeName);
+        QSignalSpy removed(remove,SIGNAL(clicked()));
+        click(remove);
+        QCOMPARE(removed.count(),1);
         QTRY_COMPARE_WITH_TIMEOUT(backend.state().value("selections").toList().size(),0,5000);backend.shutdown();
     }
     void realUiDraftRestartAndDialogs(){
@@ -52,7 +95,8 @@ private slots:
         qputenv("CLICKY_DISABLE_TTS","1");qputenv("CLICKY_THEME_DIR",(dir.path()+"/theme").toUtf8());
         QString cid;
         {
-            Backend backend;Theme theme;Translator translator;QQmlApplicationEngine engine;
+            Backend backend;Theme theme;Translator translator;Companion companion;QQmlApplicationEngine engine;
+            engine.rootContext()->setContextProperty("companion",&companion);
             engine.rootContext()->setContextProperty("backend",&backend);engine.rootContext()->setContextProperty("theme",&theme);engine.rootContext()->setContextProperty("translator",&translator);
             engine.load(QUrl("qrc:/Main.qml"));QVERIFY(!engine.rootObjects().isEmpty());
             auto *window=qobject_cast<QQuickWindow*>(engine.rootObjects().first());QVERIFY(window);window->show();

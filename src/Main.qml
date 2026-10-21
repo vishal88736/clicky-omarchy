@@ -6,13 +6,18 @@ import QtQuick.Window
 
 ApplicationWindow {
     id: win
-    width: 1120; height: 780; minimumWidth: 850; minimumHeight: 600
+    property bool libraryOpen: false
+    property bool detailOpen: false
+    property bool autoSend: false
+    property bool hasMessages: (backend.state.messages || []).length>0
+    width: libraryOpen || detailOpen ? Math.min(940,Screen.width-40) : Math.min(560,Screen.width-40)
+    height: libraryOpen || detailOpen ? Math.min(680,Screen.height-60) : Math.min(hasMessages?550:420,Screen.height-60)
     visible: false
+    flags: Qt.Window | Qt.FramelessWindowHint
     title: "Clicky"
-    color: "#101316"
+    color: "transparent"
     Material.theme: Material.Dark
     Material.accent: theme.accent
-    Material.roundedScale: theme.radius
     property string currentCid: ""
     property var historyMessages: []
     property var requestPreview: ({})
@@ -23,217 +28,202 @@ ApplicationWindow {
     property var searchResults: []
     property var providerForm: ({})
     property string notice: ""
-    property bool helpVisible: false
-    property var selectedIds: (backend.state.selections || []).map(function(m){ return m.id })
+    property var selectedIds: (backend.state.selections || []).map(function(m){return m.id})
     property var toolRows: {
         let rows=[]
-        for (let s of backend.servers) for(let t of s.tools) rows.push({server:s.id, name:t.name, schema:t.schema, enabled:t.enabled, label:s.id+" / "+t.name})
+        for(let s of backend.servers) for(let t of s.tools) rows.push({server:s.id,name:t.name,schema:t.schema,enabled:t.enabled,label:s.id+" / "+t.name})
         return rows
     }
-    function flushDraft() { draftTimer.stop(); if(currentCid) backend.send({cmd:"draft",conversation:currentCid,text:input.text}) }
-    function switchConversation(id) { flushDraft(); backend.send({cmd:"switch",id:id}) }
-    function newConversation() { flushDraft(); backend.send({cmd:"new"}) }
-    function inspectRequest() { flushDraft(); backend.send({cmd:"prepare",text:input.text}) }
-    function closeOverlay() { flushDraft(); win.hide() }
-    onClosing: function(event) { event.accepted=false; closeOverlay() }
-    onVisibleChanged: if(visible) input.forceActiveFocus()
-
-    Shortcut { sequence:"Escape"; context:Qt.ApplicationShortcut; onActivated: {
-        if(approvalDialog.opened) backend.send({cmd:"approve",id:approval.id,allow:false})
-        else if(previewDialog.opened) previewDialog.close()
-        else closeOverlay()
-    } }
-    Shortcut { sequence:"Ctrl+Return"; context:Qt.ApplicationShortcut; onActivated: if(!backend.busy) inspectRequest() }
-    Shortcut { sequence:"Ctrl+N"; context:Qt.ApplicationShortcut; onActivated: if(!backend.busy) newConversation() }
-    Shortcut { sequence:"Ctrl+K"; context:Qt.ApplicationShortcut; onActivated: search.forceActiveFocus() }
-    Shortcut { sequence:"Ctrl+."; context:Qt.ApplicationShortcut; onActivated: backend.send({cmd:"cancel"}) }
-    Shortcut { sequence:"Ctrl+Shift+Q"; context:Qt.ApplicationShortcut; onActivated: backend.quit() }
-    Shortcut { sequence:"?"; enabled:!input.activeFocus && !search.activeFocus; context:Qt.ApplicationShortcut; onActivated: helpDialog.open() }
-    Timer { id:draftTimer; interval:200; onTriggered: if(win.currentCid) backend.send({cmd:"draft",conversation:win.currentCid,text:input.text}) }
-
+    function flushDraft(){draftTimer.stop();if(currentCid)backend.send({cmd:"draft",conversation:currentCid,text:input.text})}
+    function switchConversation(id){flushDraft();backend.send({cmd:"switch",id:id})}
+    function newConversation(){flushDraft();backend.send({cmd:"new"})}
+    function inspectRequest(){autoSend=false;flushDraft();backend.send({cmd:"prepare",text:input.text})}
+    function submit(){autoSend=!backend.state.attachment;flushDraft();backend.send({cmd:"prepare",text:input.text})}
+    function closeOverlay(){flushDraft();win.hide()}
+    onClosing:function(event){event.accepted=false;closeOverlay()}
+    onVisibleChanged:if(visible)input.forceActiveFocus()
+    Shortcut {sequence:"Escape";context:Qt.ApplicationShortcut;onActivated:{if(approvalDialog.opened)backend.send({cmd:"approve",id:approval.id,allow:false});else if(previewDialog.opened)previewDialog.close();else closeOverlay()}}
+    Shortcut {sequence:"Ctrl+Return";context:Qt.ApplicationShortcut;onActivated:if(!backend.busy)inspectRequest()}
+    Shortcut {sequence:"Ctrl+N";context:Qt.ApplicationShortcut;onActivated:if(!backend.busy)newConversation()}
+    Shortcut {sequence:"Ctrl+K";context:Qt.ApplicationShortcut;onActivated:{libraryOpen=true;search.forceActiveFocus()}}
+    Shortcut {sequence:"Ctrl+.";context:Qt.ApplicationShortcut;onActivated:{companion.clear();backend.send({cmd:"cancel"})}}
+    Shortcut {sequence:"Ctrl+Shift+Q";context:Qt.ApplicationShortcut;onActivated:backend.quit()}
+    Timer {id:draftTimer;interval:200;onTriggered:if(win.currentCid)backend.send({cmd:"draft",conversation:win.currentCid,text:input.text})}
     Connections {
         target:backend
-        function onWorkerEvent(v) {
-            if(v.event==="state" && v.conversation!==win.currentCid) {
-                win.currentCid=v.conversation; input.text=v.draft || ""; search.text=""; win.trace=[]
+        function onWorkerEvent(v){
+            if(v.event==="state"){
+                win.providerForm=v.provider
+                if(v.conversation!==win.currentCid){win.currentCid=v.conversation;input.text=v.draft || "";search.text="";win.trace=[]}
             }
-            if(v.event==="history") { win.historyMessages=v.messages; historyDialog.open() }
-            if(v.event==="preview") { win.requestPreview=v.request; win.previewId=v.id; previewDialog.open() }
-            if(v.event==="approval") { win.approval=v; approvalDialog.open(); win.show(); win.raise(); win.requestActivate() }
-            if(v.event==="approval_closed" && v.id===win.approval.id) approvalDialog.close()
-            if(v.event==="activity") { let a=win.trace.slice(); a.push(v); win.trace=a }
-            if(v.event==="transcript") { input.text+=(input.text?"\n":"")+v.text; input.forceActiveFocus() }
-            if(v.event==="request_started" && v.conversation===win.currentCid) input.text=""
-            if(v.event==="models") { win.foundModels=v.models; win.notice=qsTr("Discovered models: %1").arg(v.models.join(", ")) }
-            if(v.event==="search" && v.query===search.text) win.searchResults=v.conversations
-            if(v.event==="notice") win.notice=v.message
-            if(v.event==="usage") win.notice=qsTr("Provider usage: %1").arg(JSON.stringify(v.usage))
+            if(v.event==="history"){win.historyMessages=v.messages;historyDialog.open()}
+            if(v.event==="preview"){
+                win.requestPreview=v.request;win.previewId=v.id
+                if(win.autoSend){win.autoSend=false;backend.send({cmd:"send",id:v.id})}else previewDialog.open()
+            }
+            if(v.event==="approval"){win.approval=v;approvalDialog.open();win.show();win.raise();win.requestActivate()}
+            if(v.event==="approval_closed" && v.id===win.approval.id)approvalDialog.close()
+            if(v.event==="activity"){let a=win.trace.slice();a.push(v);win.trace=a}
+            if(v.event==="transcript"){input.text+=(input.text?"\n":"")+v.text;input.forceActiveFocus()}
+            if(v.event==="request_started" && v.conversation===win.currentCid)input.text=""
+            if(v.event==="models"){win.foundModels=v.models;win.notice=qsTr("Models: %1").arg(v.models.join(", "))}
+            if(v.event==="search" && v.query===search.text)win.searchResults=v.conversations
+            if(v.event==="notice")win.notice=v.message
+            if(v.event==="usage")win.notice=qsTr("Usage: %1").arg(JSON.stringify(v.usage))
         }
     }
-
-    component SmallButton: Button { font.pixelSize:12; topInset:0; bottomInset:0; implicitHeight:34 }
-    component SectionLabel: Label { color:"#87949d"; font.pixelSize:11; font.letterSpacing:1.2 }
-    component PanelDialog: Dialog {
-        Material.theme:Material.Dark
-        Material.accent:theme.accent
-        Material.roundedScale:theme.radius
-        background:Rectangle { color:"#1b2227";radius:theme.radius;border.color:"#34414a" }
-        Overlay.modal:Rectangle { color:"#b0000000" }
+    component SmallButton: Button {
+        font.pixelSize:11;topInset:0;bottomInset:0;implicitHeight:30;leftPadding:10;rightPadding:10
+        background:Rectangle{color:parent.down?"#38443a":parent.hovered?"#2c362e":"transparent";radius:7;border.color:parent.highlighted?theme.accent:"#343e36"}
+        contentItem:Text{text:parent.text;font:parent.font;color:parent.enabled?(parent.highlighted?theme.accent:"#b5c1b7"):"#657167";horizontalAlignment:Text.AlignHCenter;verticalAlignment:Text.AlignVCenter}
+        ToolTip.visible:hovered && text.length===1;ToolTip.text:Accessible.name
     }
-
-    Item {
-        anchors.fill:parent
-        LayoutMirroring.enabled:Qt.application.layoutDirection===Qt.RightToLeft
-        LayoutMirroring.childrenInherit:true
+    component PanelDialog: Dialog {
+        id:panel
+        Material.theme:Material.Dark;Material.accent:theme.accent
+        Material.background:"#1b231e"
+        onAboutToShow:win.detailOpen=true
+        onClosed:win.detailOpen=false
+        header:Label{text:panel.title;color:"#edf1e8";font.pixelSize:20;padding:20;bottomPadding:8}
+        footer:DialogButtonBox {
+            visible:panel.standardButtons!==Dialog.NoButton
+            standardButtons:panel.standardButtons
+            background:Rectangle{color:"#1b231e";radius:10}
+            onAccepted:panel.accept()
+            onRejected:panel.reject()
+        }
+        background:Rectangle{color:"#1b231e";radius:Math.max(10,theme.radius);border.color:"#414f43"}
+        Overlay.modal:Rectangle{color:"#bb0c110e"}
+    }
+    Rectangle {
+        anchors.fill:parent;radius:Math.max(14,theme.radius);color:"#171e19";border.color:"#414e41";border.width:1
         RowLayout {
-            anchors.fill:parent; spacing:0
+            anchors.fill:parent;spacing:0
             Rectangle {
-                color:"#151a1e"; Layout.preferredWidth:250; Layout.fillHeight:true
+                visible:win.libraryOpen;Layout.preferredWidth:290;Layout.fillHeight:true;color:"#121914";radius:Math.max(14,theme.radius)
                 ColumnLayout {
-                    anchors.fill:parent; anchors.margins:18; spacing:10
+                    anchors.fill:parent;anchors.margins:18;spacing:10
                     RowLayout {
-                        Rectangle { width:10;height:10;radius:5;color:theme.accent }
-                        Label { text:"Clicky"; font.pixelSize:24; font.weight:Font.DemiBold; Layout.fillWidth:true }
-                        SmallButton { text:"+"; Accessible.name:qsTr("New conversation"); enabled:!backend.busy; onClicked:newConversation() }
+                        Label{text:qsTr("Conversations");font.pixelSize:17;font.weight:Font.DemiBold;Layout.fillWidth:true}
+                        SmallButton{text:"+";Accessible.name:qsTr("New conversation");enabled:!backend.busy;onClicked:newConversation()}
                     }
-                    Label { text:qsTr("Your desktop, with context."); color:"#87949d"; font.pixelSize:11 }
-                    TextField { id:search; objectName:"historySearch"; Layout.fillWidth:true; placeholderText:qsTr("Search conversations"); font.pixelSize:12;onTextChanged:backend.send({cmd:"search",text:text}) }
-                    SectionLabel { text:qsTr("CONVERSATIONS") }
+                    TextField{id:search;objectName:"historySearch";Layout.fillWidth:true;placeholderText:qsTr("Search history…");font.pixelSize:12;onTextChanged:backend.send({cmd:"search",text:text})}
+                    Label{text:qsTr("Open to continue · + Context to attach");font.pixelSize:10;color:"#859889"}
                     ListView {
-                        id:historyList; objectName:"historyList"; Layout.fillWidth:true; Layout.fillHeight:true; clip:true; spacing:5
+                        id:historyList;objectName:"historyList";Layout.fillWidth:true;Layout.fillHeight:true;clip:true;spacing:6
                         model:search.text.length?win.searchResults:(backend.state.conversations || [])
                         delegate:Rectangle {
                             required property var modelData
-                            width:historyList.width; height:74; radius:theme.radius
-                            color:modelData.id===win.currentCid?"#263037":"#191f24"
+                            width:historyList.width;height:94;radius:8;color:modelData.id===win.currentCid?"#27352b":"#1c261f"
                             ColumnLayout {
-                                anchors.fill:parent; anchors.margins:9; spacing:2
-                                Label { text:modelData.title; elide:Text.ElideRight; Layout.fillWidth:true; font.pixelSize:12 }
+                                anchors.fill:parent;anchors.margins:10;spacing:3
+                                Label{text:modelData.title;textFormat:Text.PlainText;elide:Text.ElideRight;Layout.fillWidth:true;font.pixelSize:12}
+                                Label{text:Qt.formatDateTime(new Date(modelData.updated),"MMM d · hh:mm");font.pixelSize:10;color:"#859889"}
                                 RowLayout {
-                                    Label {
-                                        text: { translator.language; return new Date(modelData.updated).toLocaleString(Qt.locale(),"dd MMM hh:mm") }
-                                        color:"#87949d";font.pixelSize:10;Layout.fillWidth:true
-                                    }
-                                    SmallButton { objectName:"addContext_"+modelData.id;text:qsTr("Context"); flat:true; enabled:modelData.id!==win.currentCid && !backend.busy; onClicked: {flushDraft();backend.send({cmd:"history",id:modelData.id})} }
-                                }
-                            }
-                            TapHandler { enabled:!backend.busy; onTapped:switchConversation(modelData.id) }
-                        }
-                    }
-                    SectionLabel { text:qsTr("SELECTED CONTEXT") }
-                    Label { visible:!(backend.state.selections || []).length; text:qsTr("Choose messages with Context.\nBrowsing history adds nothing.");font.pixelSize:11;color:"#87949d";wrapMode:Text.WordWrap;Layout.fillWidth:true }
-                    ScrollView {
-                        Layout.fillWidth:true;Layout.preferredHeight:Math.min(120,(backend.state.selections || []).length*43)
-                        Column {
-                            width:parent.width
-                            Repeater {
-                                model:backend.state.selections || []
-                                RowLayout {
-                                    required property var modelData
-                                    width:parent.width
-                                    Label { text:modelData.title+" · "+modelData.role;elide:Text.ElideRight;Layout.fillWidth:true;font.pixelSize:11 }
-                                    SmallButton { objectName:"removeContext_"+modelData.id;text:"×"; Accessible.name:qsTr("Remove context selection"); onClicked:backend.send({cmd:"select",message:modelData.id,enabled:false}) }
+                                    SmallButton{text:qsTr("Open");enabled:!backend.busy;onClicked:switchConversation(modelData.id)}
+                                    SmallButton{objectName:"addContext_"+modelData.id;text:qsTr("+ Context");visible:modelData.id!==win.currentCid;onClicked:backend.send({cmd:"history",id:modelData.id})}
                                 }
                             }
                         }
                     }
-                    SmallButton { text:qsTr("Reset selected context");Layout.fillWidth:true;enabled:!backend.busy;onClicked:backend.send({cmd:"fresh_context"}) }
+                    Label{text:qsTr("SELECTED CONTEXT");color:"#859889";font.pixelSize:10;font.letterSpacing:1.2}
+                    ListView {
+                        id:selectionsList
+                        Layout.fillWidth:true;Layout.preferredHeight:Math.min(150,count*34);clip:true;spacing:4
+                        model:backend.state.selections || []
+                        delegate:RowLayout {
+                            required property var modelData
+                            width:selectionsList.width;height:30
+                            Label{text:modelData.content;textFormat:Text.PlainText;elide:Text.ElideRight;Layout.fillWidth:true;font.pixelSize:11}
+                            SmallButton{objectName:"removeContext_"+modelData.id;text:"×";Accessible.name:qsTr("Remove context");onClicked:backend.send({cmd:"select",message:modelData.id,enabled:false})}
+                        }
+                    }
                     RowLayout {
-                        SmallButton { text:qsTr("Settings");Layout.fillWidth:true;onClicked:{win.providerForm=backend.state.provider || {};settingsDialog.open()} }
-                        SmallButton { text:qsTr("Tools");Layout.fillWidth:true;onClicked:toolsDialog.open() }
+                        SmallButton{text:qsTr("Fresh context");onClicked:backend.send({cmd:"fresh_context"})}
+                        SmallButton{text:qsTr("Clear chat");onClicked:clearDialog.open()}
                     }
                 }
             }
             ColumnLayout {
-                Layout.fillWidth:true;Layout.fillHeight:true;spacing:0
-                Rectangle {
-                    color:"#101316";Layout.fillWidth:true;Layout.preferredHeight:76
-                    RowLayout {
-                        anchors.fill:parent;anchors.margins:20;spacing:14
-                        ColumnLayout {
-                            Layout.fillWidth:true;spacing:5
-                            Label { text:(backend.state.provider || {}).model || qsTr("Connect your local model");font.pixelSize:18;font.weight:Font.Medium;elide:Text.ElideRight;Layout.fillWidth:true }
-                            Label { text:(backend.state.provider || {}).base_url || "";color:"#87949d";font.pixelSize:11 }
-                        }
-                        Label { text:qsTr("%1 MCP connected").arg(backend.servers.filter(function(s){return s.state==="connected"}).length);color:theme.accent;font.pixelSize:11 }
-                        SmallButton { text:qsTr("Clear");enabled:!backend.busy;onClicked:clearDialog.open() }
-                        SmallButton { text:qsTr("Hide");onClicked:closeOverlay() }
-                    }
-                }
-                Rectangle { color:"#263037";Layout.fillWidth:true;Layout.preferredHeight:1 }
-                Rectangle {
-                    visible:!!backend.error;color:"#392324";Layout.fillWidth:true;Layout.preferredHeight:errorRow.implicitHeight+14
-                    RowLayout {
-                        id:errorRow;anchors.fill:parent;anchors.margins:8
-                        Label { text:backend.error;wrapMode:Text.WordWrap;Layout.fillWidth:true;color:"#ffb6b2";font.pixelSize:12 }
-                        SmallButton { text:"×";onClicked:backend.dismissError() }
-                    }
-                }
-                Item {
-                    Layout.fillWidth:true;Layout.fillHeight:true
+                Layout.fillWidth:true;Layout.fillHeight:true;Layout.margins:20;spacing:10
+                RowLayout {
+                    Layout.fillWidth:true
+                    Layout.minimumHeight:46;Layout.maximumHeight:46
+                    BuddyAvatar{Layout.preferredWidth:38;Layout.preferredHeight:46;scale:0.82;thinking:backend.busy;recording:backend.voiceState==="recording"}
                     ColumnLayout {
-                        visible:!(backend.state.messages || []).length
-                        anchors.centerIn:parent;width:Math.min(450,parent.width-60);spacing:16
-                        Label { text:qsTr("A little space to think.");font.pixelSize:29;font.weight:Font.Light;Layout.fillWidth:true;wrapMode:Text.WordWrap }
-                        Label { text:qsTr("Ask a question, bring a screen capture, or connect a tool. You choose what the assistant can see and do.");font.pixelSize:14;lineHeight:1.4;wrapMode:Text.WordWrap;color:"#a7b1b8";Layout.fillWidth:true }
-                        Label { text:qsTr("Open Settings to connect your local model.");font.pixelSize:12;wrapMode:Text.WordWrap;color:theme.accent;Layout.fillWidth:true;visible:!(backend.state.provider || {}).model }
+                        spacing:2;Layout.fillWidth:true
+                        Label{text:"clicky";Layout.fillWidth:true;font.pixelSize:21;font.weight:Font.DemiBold;font.letterSpacing:-0.7;color:"#edf1e8"}
+                        Label{text:backend.voiceState==="recording"?qsTr("Listening · local transcription"):backend.busy?qsTr("Working with you…"):qsTr("A little buddy for your desktop");Layout.fillWidth:true;elide:Text.ElideRight;font.pixelSize:10;color:"#9bab9a"}
                     }
-                    ListView {
-                        id:messages;objectName:"messageList";anchors.fill:parent;anchors.margins:20;clip:true;spacing:18
-                        model:backend.state.messages || []
-                        onCountChanged:positionViewAtEnd()
-                        delegate:ColumnLayout {
-                            required property var modelData
-                            width:messages.width;spacing:4
-                            RowLayout {
-                                Label { text:modelData.role==="user"?qsTr("YOU"):qsTr("CLICKY");font.pixelSize:10;font.letterSpacing:1;color:modelData.role==="user"?"#87949d":theme.accent }
-                                Label { text:modelData.status==="complete"?"":modelData.status;color:"#87949d";font.pixelSize:10 }
-                                Item { Layout.fillWidth:true }
-                                SmallButton { text:qsTr("Speak");flat:true;visible:modelData.role==="assistant";onClicked:backend.speak(modelData.content) }
-                            }
-                            TextArea { text:modelData.content;readOnly:true;selectByMouse:true;textFormat:TextEdit.PlainText;wrapMode:TextEdit.Wrap;Layout.fillWidth:true;font.pixelSize:14;color:"#e5e9eb";padding:0;background:null }
-                        }
-                    }
+                    SmallButton{objectName:"historyToggle";text:"≡";Accessible.name:qsTr("Conversation history");checkable:true;checked:win.libraryOpen;onClicked:win.libraryOpen=!win.libraryOpen}
+                    SmallButton{text:"⚙";Accessible.name:qsTr("Settings");onClicked:settingsDialog.open()}
+                    SmallButton{text:"×";Accessible.name:qsTr("Hide Clicky");onClicked:closeOverlay()}
+                    MouseArea{Layout.preferredWidth:8;Layout.fillHeight:true;onPressed:win.startSystemMove()}
                 }
+                Rectangle{Layout.fillWidth:true;height:1;color:"#2e3a30"}
                 Rectangle {
-                    visible:!!backend.state.attachment || !!backend.state.window;color:"#1c252b";Layout.fillWidth:true;Layout.preferredHeight:100
-                    RowLayout {
-                        anchors.fill:parent;anchors.margins:12
-                        Image { visible:!!backend.state.attachment;source:backend.state.attachment?"file://"+backend.state.attachment.path:"";Layout.preferredWidth:115;Layout.fillHeight:true;fillMode:Image.PreserveAspectFit;TapHandler{onTapped:imageDialog.open()} }
-                        ColumnLayout {
-                            Layout.fillWidth:true
-                            Label { text:backend.state.attachment?qsTr("Screen capture · local preview"):qsTr("Active-window context");font.pixelSize:12 }
-                            Label { text:backend.state.window?JSON.stringify(backend.state.window):qsTr("Nothing is uploaded until you review and send.");font.pixelSize:11;color:"#a7b1b8";wrapMode:Text.Wrap;Layout.fillWidth:true }
-                        }
-                        SmallButton { text:qsTr("OCR");visible:!!backend.state.attachment;onClicked:backend.send({cmd:"ocr"}) }
-                        SmallButton { text:qsTr("Remove");onClicked:{backend.send({cmd:"remove_attachment"});backend.send({cmd:"remove_window"})} }
-                    }
+                    visible:backend.error.length>0;Layout.fillWidth:true;implicitHeight:errorLabel.implicitHeight+18;radius:8;color:"#412c28"
+                    Label{id:errorLabel;anchors.fill:parent;anchors.margins:9;text:backend.error;textFormat:Text.PlainText;color:"#f4c8b7";wrapMode:Text.Wrap;font.pixelSize:11;TapHandler{onTapped:backend.dismissError()}}
                 }
                 ColumnLayout {
-                    Layout.fillWidth:true;Layout.margins:18;spacing:8
+                    visible:!win.hasMessages;Layout.fillWidth:true;Layout.fillHeight:true;spacing:5
+                    Label{text:qsTr("What are we working on?");font.pixelSize:22;font.weight:Font.Medium;Layout.fillWidth:true;color:"#e7ecdf"}
+                    Label{text:(backend.state.provider || {}).model?qsTr("Ask, talk, or bring a piece of your screen."):qsTr("Your buddy is ready. Connect a model in Settings to chat.");wrapMode:Text.Wrap;Layout.fillWidth:true;font.pixelSize:12;color:"#95a591"}
                     RowLayout {
-                        SmallButton { text:qsTr("Screen");enabled:!backend.busy;onClicked:backend.capture(false) }
-                        SmallButton { text:qsTr("Region");enabled:!backend.busy;onClicked:backend.capture(true) }
-                        SmallButton { text:qsTr("Window info");enabled:!backend.busy;onClicked:backend.windowContext() }
-                        SmallButton { text:backend.voiceState==="recording"?qsTr("■ Finish recording"):backend.voiceState==="transcribing"?qsTr("Transcribing…"):qsTr("● Talk");enabled:!backend.busy && backend.voiceState!=="transcribing";onClicked:backend.send({cmd:backend.voiceState==="recording"?"record_stop":"record_start"}) }
-                        SmallButton { text:qsTr("Mute");onClicked:backend.mute() }
-                        Item { Layout.fillWidth:true }
+                        SmallButton{text:qsTr("Meet your buddy");onClicked:{companion.enabled=true;companion.tour();closeOverlay()}}
+                        SmallButton{text:qsTr("Connect model");visible:!(backend.state.provider || {}).model;onClicked:settingsDialog.open()}
                     }
+                }
+                ListView {
+                    id:messages;objectName:"messageList";visible:win.hasMessages;Layout.fillWidth:true;Layout.fillHeight:true;clip:true;spacing:16
+                    model:backend.state.messages || [];onCountChanged:Qt.callLater(positionViewAtEnd)
+                    delegate:ColumnLayout {
+                        required property var modelData
+                        width:messages.width;spacing:5
+                        RowLayout {
+                            Label{text:modelData.role==="user"?qsTr("YOU"):"CLICKY";font.pixelSize:9;font.letterSpacing:1;color:modelData.role==="user"?"#91a08e":theme.accent;Layout.fillWidth:true}
+                            SmallButton{text:qsTr("Speak");visible:modelData.role==="assistant";onClicked:backend.speak(modelData.content)}
+                        }
+                        TextArea{text:modelData.content;readOnly:true;selectByMouse:true;textFormat:TextEdit.PlainText;wrapMode:TextEdit.Wrap;Layout.fillWidth:true;font.pixelSize:13;color:"#e7ecdf";padding:0;background:null}
+                        Label{text:modelData.status==="complete"?"":modelData.status;font.pixelSize:9;color:"#91a08e";visible:text.length>0}
+                    }
+                }
+                RowLayout {
+                    visible:!!backend.state.attachment || !!backend.state.window;Layout.fillWidth:true
+                    Image{visible:!!backend.state.attachment;source:backend.state.attachment?"file://"+backend.state.attachment.path:"";Layout.preferredWidth:76;Layout.preferredHeight:45;fillMode:Image.PreserveAspectFit;TapHandler{onTapped:imageDialog.open()}}
+                    Label{text:backend.state.attachment?qsTr("Screen attached · review before sending"):JSON.stringify(backend.state.window || {});textFormat:Text.PlainText;wrapMode:Text.Wrap;Layout.fillWidth:true;font.pixelSize:10;color:theme.accent}
+                    SmallButton{text:qsTr("OCR");visible:!!backend.state.attachment;onClicked:backend.send({cmd:"ocr"})}
+                    SmallButton{text:"×";Accessible.name:qsTr("Remove attachment");onClicked:{backend.send({cmd:"remove_attachment"});backend.send({cmd:"remove_window"})}}
+                }
+                Rectangle {
+                    Layout.fillWidth:true;Layout.preferredHeight:90;radius:10;color:"#222d24";border.color:input.activeFocus?"#64735c":"#3b493b"
                     ScrollView {
-                        Layout.fillWidth:true;Layout.preferredHeight:100
-                        TextArea { id:input;objectName:"messageInput";placeholderText:qsTr("Type a message. Ctrl+Enter to review.");wrapMode:TextEdit.Wrap;selectByMouse:true;textFormat:TextEdit.PlainText;font.pixelSize:14;onTextChanged:draftTimer.restart() }
+                        anchors.fill:parent;anchors.margins:8;clip:true
+                        TextArea {
+                            id:input;objectName:"messageInput";wrapMode:TextEdit.Wrap;selectByMouse:true;textFormat:TextEdit.PlainText;font.pixelSize:14;color:"#edf1e8";background:null
+                            onTextChanged:draftTimer.restart()
+                            Keys.onReturnPressed:function(e){if(e.modifiers===Qt.NoModifier){e.accepted=true;if(text.trim().length && !backend.busy)win.submit()}else e.accepted=false}
+                        }
                     }
-                    RowLayout {
-                        Label { text:backend.voiceState==="recording"?qsTr("Microphone on · local only · 60s limit"):backend.busy?qsTr("Working · actions require your approval"):win.notice || qsTr("Explicit context. Reviewed actions.");color:backend.voiceState==="recording"?"#ffb6b2":"#87949d";font.pixelSize:11;elide:Text.ElideRight;Layout.fillWidth:true }
-                        SmallButton { text:qsTr("Activity");onClicked:activityDialog.open() }
-                        SmallButton { text:qsTr("Stop");onClicked:backend.send({cmd:"cancel"}) }
-                        Button { text:qsTr("Review & send");objectName:"reviewButton";highlighted:true;enabled:!backend.busy && input.text.trim().length>0;onClicked:inspectRequest() }
-                    }
+                    Text{anchors.left:parent.left;anchors.top:parent.top;anchors.margins:14;text:qsTr("Ask anything…");color:"#84927c";font.pixelSize:14;visible:input.text.length===0}
+                }
+                RowLayout {
+                    SmallButton{objectName:"captureButton";text:qsTr("Screen");enabled:!backend.busy;onClicked:backend.capture(false)}
+                    SmallButton{text:qsTr("Region");enabled:!backend.busy;onClicked:backend.capture(true)}
+                    SmallButton{objectName:"voiceButton";text:backend.voiceState==="recording"?qsTr("■ Finish"):qsTr("● Talk");enabled:!backend.busy && backend.voiceState!=="transcribing";highlighted:backend.voiceState==="recording";onClicked:backend.send({cmd:backend.voiceState==="recording"?"record_stop":"record_start"})}
+                    SmallButton{text:qsTr("Inspect");enabled:!backend.busy && input.text.trim().length>0;onClicked:inspectRequest()}
+                    Item{Layout.fillWidth:true}
+                    SmallButton{objectName:"reviewButton";text:backend.busy?qsTr("Stop"):qsTr("Ask ↵");highlighted:true;enabled:backend.busy || input.text.trim().length>0;onClicked:{if(backend.busy){companion.clear();backend.send({cmd:"cancel"})}else submit()}}
+                }
+                RowLayout {
+                    Rectangle{width:5;height:5;radius:3;color:(backend.state.provider || {}).model?theme.accent:"#6c786a"}
+                    Label{text:(backend.state.provider || {}).model || qsTr("No model connected");textFormat:Text.PlainText;elide:Text.ElideRight;Layout.fillWidth:true;font.pixelSize:9;color:"#91a08e"}
+                    SmallButton{text:backend.servers.filter(function(s){return s.state==="connected"}).length+" MCP";onClicked:toolsDialog.open()}
+                    SmallButton{text:qsTr("Activity");onClicked:activityDialog.open()}
                 }
             }
         }
     }
-
     PanelDialog {
         id:historyDialog;objectName:"contextDialog";title:qsTr("Choose historical messages");modal:true;anchors.centerIn:parent;width:Math.min(720,win.width-60);height:Math.min(580,win.height-70)
         standardButtons:Dialog.Close
@@ -281,10 +271,12 @@ ApplicationWindow {
         }
     }
     PanelDialog {
-        id:settingsDialog;objectName:"settingsDialog";title:qsTr("Model & voice settings");modal:true;anchors.centerIn:parent;width:660;height:600;standardButtons:Dialog.Close
+        id:settingsDialog;objectName:"settingsDialog";title:qsTr("Model & voice settings");modal:true;anchors.centerIn:parent;width:Math.min(660,win.width-40);height:Math.min(600,win.height-40);standardButtons:Dialog.Close
+        ScrollView {
+            anchors.fill:parent;clip:true;contentWidth:availableWidth
         ColumnLayout {
-            anchors.fill:parent;spacing:10
-            Label { text:qsTr("Local OpenAI-compatible endpoint. No remote fallback.");wrapMode:Text.Wrap;Layout.fillWidth:true }
+            width:settingsDialog.availableWidth;spacing:10
+            Label { text:qsTr("OpenAI-compatible endpoint · local or HTTPS hosted. No silent fallback.");wrapMode:Text.Wrap;Layout.fillWidth:true }
             TextField { id:baseUrl;Layout.fillWidth:true;placeholderText:qsTr("Base URL (including /v1)");text:win.providerForm.base_url || "" }
             TextField { id:modelName;Layout.fillWidth:true;placeholderText:qsTr("Model identifier");text:win.providerForm.model || "" }
             TextField { id:providerKey;Layout.fillWidth:true;placeholderText:qsTr("Optional API key → GNOME Keyring");echoMode:TextInput.Password;onVisibleChanged:if(!visible)text="" }
@@ -304,7 +296,16 @@ ApplicationWindow {
             Label { text:qsTr("Voice input: PipeWire → local Voxtype. Transcription fills the draft for review. No clipboard access.");wrapMode:Text.Wrap;Layout.fillWidth:true;font.pixelSize:12 }
             Label { text:backend.speechStatus;wrapMode:Text.Wrap;Layout.fillWidth:true;font.pixelSize:12;color:theme.accent }
             Label { text:win.notice;wrapMode:Text.Wrap;Layout.fillWidth:true;font.pixelSize:11 }
+            RowLayout {
+                Switch {text:qsTr("Pointer buddy");checked:companion?companion.enabled:false;onToggled:if(companion)companion.enabled=checked}
+                SmallButton {text:qsTr("Try pointing");onClicked:companion.tour()}
+                SmallButton {text:qsTr("Mute");onClicked:backend.mute()}
+                SmallButton {text:qsTr("Window info");onClicked:backend.windowContext()}
+            }
+            Label {text:companion && companion.available?qsTr("Hyprland cursor tracking connected · overlay passes clicks through"):qsTr("Cursor tracking unavailable in this session");font.pixelSize:10;wrapMode:Text.Wrap;Layout.fillWidth:true;color:theme.accent}
+            SmallButton {text:qsTr("Quit Clicky");onClicked:backend.quit()}
             Item { Layout.fillHeight:true }
+        }
         }
     }
     PanelDialog {
@@ -347,7 +348,7 @@ ApplicationWindow {
         }
     }
     PanelDialog {
-        id:invokeDialog;title:qsTr("Invoke a discovered tool");modal:true;anchors.centerIn:parent;width:650;height:550;standardButtons:Dialog.Close
+        id:invokeDialog;title:qsTr("Invoke a discovered tool");modal:true;anchors.centerIn:parent;width:Math.min(650,win.width-40);height:Math.min(550,win.height-40);standardButtons:Dialog.Close
         ColumnLayout {
             anchors.fill:parent
             ComboBox { id:toolChoice;Layout.fillWidth:true;model:win.toolRows;textRole:"label" }
@@ -357,7 +358,7 @@ ApplicationWindow {
         }
     }
     PanelDialog {
-        id:registerDialog;title:qsTr("Register a trusted MCP server");modal:true;anchors.centerIn:parent;width:680;height:500;standardButtons:Dialog.Close
+        id:registerDialog;title:qsTr("Register a trusted MCP server");modal:true;anchors.centerIn:parent;width:Math.min(680,win.width-40);height:Math.min(500,win.height-40);standardButtons:Dialog.Close
         ColumnLayout {
             anchors.fill:parent
             Label { text:qsTr("Use env_refs/header_refs for Keyring or env:VARIABLE references. Never put credentials in arguments. New servers start disabled.");wrapMode:Text.Wrap;Layout.fillWidth:true }

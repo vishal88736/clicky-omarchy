@@ -1,1 +1,1 @@
-<RCC><qresource prefix="/"><file>Main.qml</file><file>i18n/en.json</file><file>i18n/hi.json</file></qresource></RCC>
+<RCC><qresource prefix="/"><file>Main.qml</file><file>BuddyAvatar.qml</file><file>BuddyOverlay.qml</file><file>i18n/en.json</file><file>i18n/hi.json</file></qresource></RCC>
